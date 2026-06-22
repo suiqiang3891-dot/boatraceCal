@@ -1,11 +1,16 @@
+# Local worktrees and environments
 .worktrees/
 .superpowers/
 .venv/
+
+# Python tool caches
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Generated project data and runtime state
 data/
 artifacts/
 .omx/state/
