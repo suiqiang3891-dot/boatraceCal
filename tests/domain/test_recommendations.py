@@ -76,6 +76,18 @@ def test_preplan_cannot_be_a_final_selection() -> None:
         make_recommendation(stage=PlanStage.PREPLAN, decision=Decision.SELECT)
 
 
+@pytest.mark.parametrize("stage", ["preplan", "final", "draft"])
+def test_recommendation_rejects_string_stage(stage: str) -> None:
+    with pytest.raises(ValueError, match="stage"):
+        make_recommendation(stage=stage, decision=Decision.SELECT)
+
+
+@pytest.mark.parametrize("decision", ["select", "pass", "hold"])
+def test_recommendation_rejects_string_decision(decision: str) -> None:
+    with pytest.raises(ValueError, match="decision"):
+        make_recommendation(stage=PlanStage.FINAL, decision=decision)
+
+
 @pytest.mark.parametrize(
     ("odds", "expected_value"),
     [(Decimal("5"), None), (None, Decimal("0.2")), (Decimal("5"), Decimal("0.2"))],

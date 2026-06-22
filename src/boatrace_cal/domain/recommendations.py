@@ -42,6 +42,11 @@ class Recommendation:
     reason_codes: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        if type(self.stage) is not PlanStage:
+            raise ValueError("stage must be a PlanStage")
+        if type(self.decision) is not Decision:
+            raise ValueError("decision must be a Decision")
+
         recommendation_id = self.recommendation_id.strip()
         if not recommendation_id:
             raise ValueError("recommendation id must not be empty")
