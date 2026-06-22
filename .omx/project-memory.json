@@ -1,0 +1,41 @@
+{
+  "techStack": {
+    "status": "recommended_pending_validation",
+    "runtime": "Python 3.12+ modular monolith",
+    "projectLayout": "pyproject.toml + src/boatrace_cal",
+    "rawData": "Persist collection metadata, content hashes, and immutable normalized records; do not retain successful response bodies long-term; quarantine failed or parse-anomalous raw responses for 30 days",
+    "analyticsStorage": "Parquet + DuckDB",
+    "dataProcessing": "Pandas initially; evaluate Polars only after measured scale bottlenecks",
+    "modeling": "scikit-learn: Logistic Regression baseline, HistGradientBoosting candidate, and probability calibration on independent temporal validation windows",
+    "api": "FastAPI service with an OpenAPI contract",
+    "frontend": "React + TypeScript + Vite; Apache ECharts for analytical charts",
+    "configuration": "TOML/JSON with separate data, feature, model, and strategy versions",
+    "quality": "pytest + Ruff + mypy",
+    "scheduling": "CLI + Windows Task Scheduler initially; no Airflow/Celery",
+    "desktopPackaging": "Local web app first; consider Tauri/Electron only if distribution requires it"
+  },
+  "build": {
+    "sequence": [
+      "M0-M2: Python CLI, domain/data contracts, time-safety validation, and DuckDB/Parquet data layer",
+      "M3-M4: baselines, calibration, value strategy, and walk-forward backtesting",
+      "M5: FastAPI/OpenAPI and React analysis workbench",
+      "Later: optional desktop packaging after a real need is demonstrated"
+    ]
+  },
+  "conventions": {
+    "architecture": "Keep probability model, value strategy, settlement, and presentation as separate modules",
+    "projectIndependence": "The project must not depend on any external project's path, code, runtime, or internal schema; external data enters only through project-owned versioned file/API contracts and configurable adapters",
+    "dailyWorkflow": "Generate a next-day preplan every evening using only then-available data; refresh at T-30/T-15/T-10/T-5; freeze final SELECT/PASS at T-10 and show T-5 changes without silent overwrite",
+    "modelBoundary": "Use separate night-before and race-day models; first-version recommendations cover trifecta ordered only, while settlement contracts support five bet types",
+    "uiDirection": "Use visual direction 3 (Analyst Grid): a high-density smart table with grouped venue/race rows, frozen headers, row detail inspection, review states, immutable confirmation, and Excel export",
+    "dependencyPolicy": "Do not add dependencies without explicit user approval; pin versions against official compatibility guidance during implementation",
+    "productBoundary": "Decision support and paper simulation only by default; no guaranteed-profit claims or automatic wagering"
+  },
+  "notes": [
+    {
+      "category": "architecture",
+      "content": "Technology route confirmed for long-term project memory on 2026-06-22. This is an implementation recommendation, not evidence that dependencies or modules are already installed.",
+      "timestamp": "2026-06-22T06:50:00+08:00"
+    }
+  ]
+}
