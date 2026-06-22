@@ -30,18 +30,23 @@ class BetCombination:
     bet_type: BetType
     lanes: tuple[int, ...]
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.bet_type, BetType):
+            raise ValueError("bet type must be a BetType")
+        if len(self.lanes) != self.bet_type.lane_count:
+            raise ValueError(f"{self.bet_type} requires {self.bet_type.lane_count} lanes")
+        if any(type(lane) is not int for lane in self.lanes):
+            raise ValueError("bet lanes must be integers")
+        if len(set(self.lanes)) != len(self.lanes):
+            raise ValueError("bet lanes must be unique")
+        if any(not 1 <= lane <= 6 for lane in self.lanes):
+            raise ValueError("bet lanes must be between 1 and 6")
+        if not self.bet_type.ordered:
+            object.__setattr__(self, "lanes", tuple(sorted(self.lanes)))
+
     @classmethod
     def create(cls, bet_type: BetType, lanes: Iterable[int]) -> "BetCombination":
-        materialized_lanes = tuple(lanes)
-        if len(materialized_lanes) != bet_type.lane_count:
-            raise ValueError(f"{bet_type} requires {bet_type.lane_count} lanes")
-        if len(set(materialized_lanes)) != len(materialized_lanes):
-            raise ValueError("bet lanes must be unique")
-        if any(not 1 <= lane <= 6 for lane in materialized_lanes):
-            raise ValueError("bet lanes must be between 1 and 6")
-        if not bet_type.ordered:
-            materialized_lanes = tuple(sorted(materialized_lanes))
-        return cls(bet_type=bet_type, lanes=materialized_lanes)
+        return cls(bet_type=bet_type, lanes=tuple(lanes))
 
     @property
     def key(self) -> str:

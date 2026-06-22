@@ -34,6 +34,28 @@ def test_box_trifecta_normalizes_lane_order() -> None:
     assert combination.key == "1-2-3"
 
 
+def test_direct_constructor_normalizes_box_lane_order() -> None:
+    combination = BetCombination(BetType.TRIFECTA_BOX, (3, 1, 2))
+
+    assert combination.lanes == (1, 2, 3)
+
+
+@pytest.mark.parametrize("lanes", [(1, 1), (0, 1), (1, 7)])
+def test_direct_constructor_rejects_invalid_lanes(lanes: tuple[int, int]) -> None:
+    with pytest.raises(ValueError):
+        BetCombination(BetType.EXACTA_BOX, lanes)
+
+
+def test_direct_constructor_rejects_wrong_lane_count() -> None:
+    with pytest.raises(ValueError):
+        BetCombination(BetType.TRIFECTA_BOX, (1, 2))
+
+
+def test_direct_constructor_rejects_non_bet_type() -> None:
+    with pytest.raises(ValueError):
+        BetCombination("exacta_box", (1, 2))  # type: ignore[arg-type]
+
+
 def test_combination_rejects_duplicate_lanes() -> None:
     with pytest.raises(ValueError):
         BetCombination.create(BetType.EXACTA_ORDERED, [1, 1])
@@ -43,6 +65,11 @@ def test_combination_rejects_duplicate_lanes() -> None:
 def test_combination_rejects_lane_outside_race_range(lane: int) -> None:
     with pytest.raises(ValueError):
         BetCombination.create(BetType.EXACTA_BOX, [1, lane])
+
+
+def test_combination_rejects_boolean_lane() -> None:
+    with pytest.raises(ValueError):
+        BetCombination.create(BetType.EXACTA_ORDERED, [True, 2])
 
 
 @pytest.mark.parametrize(
@@ -67,3 +94,19 @@ def test_combination_safely_materializes_lane_iterator() -> None:
 
     assert combination.lanes == (1, 2, 3)
     assert list(lanes) == []
+
+
+@pytest.mark.parametrize(
+    ("bet_type", "expected_lanes"),
+    [
+        (BetType.EXACTA_ORDERED, (2, 1)),
+        (BetType.EXACTA_BOX, (1, 2)),
+        (BetType.WIDE_BOX, (1, 2)),
+    ],
+)
+def test_two_lane_bets_apply_settlement_ordering(
+    bet_type: BetType, expected_lanes: tuple[int, int]
+) -> None:
+    combination = BetCombination.create(bet_type, [2, 1])
+
+    assert combination.lanes == expected_lanes
