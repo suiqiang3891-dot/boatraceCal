@@ -24,6 +24,14 @@ class Decision(StrEnum):
     PASS = "pass"
 
 
+class ConfidenceLevel(StrEnum):
+    """Confidence conveyed with every provisional or final analysis."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 @dataclass(frozen=True, slots=True)
 class Recommendation:
     """Auditable recommendation without provisional market-value claims."""
@@ -33,6 +41,7 @@ class Recommendation:
     combination: BetCombination
     stage: PlanStage
     decision: Decision
+    confidence: ConfidenceLevel
     probability: Decimal
     odds: Decimal | None
     expected_value: Decimal | None
@@ -46,16 +55,36 @@ class Recommendation:
             raise ValueError("stage must be a PlanStage")
         if type(self.decision) is not Decision:
             raise ValueError("decision must be a Decision")
+        if type(self.confidence) is not ConfidenceLevel:
+            raise ValueError("confidence must be a ConfidenceLevel")
 
         recommendation_id = self.recommendation_id.strip()
         if not recommendation_id:
             raise ValueError("recommendation id must not be empty")
         object.__setattr__(self, "recommendation_id", recommendation_id)
 
+        if type(self.probability) is not Decimal or not self.probability.is_finite():
+            raise ValueError("probability must be a finite Decimal")
         if not Decimal("0") <= self.probability <= Decimal("1"):
             raise ValueError("probability must be between 0 and 1")
-        if type(self.stake_units) is not int or self.stake_units < 0:
-            raise ValueError("stake units must be a non-negative integer")
+
+        if self.odds is not None:
+            if type(self.odds) is not Decimal or not self.odds.is_finite():
+                raise ValueError("odds must be a finite Decimal")
+            if self.odds <= Decimal("0"):
+                raise ValueError("odds must be positive")
+        if self.expected_value is not None and (
+            type(self.expected_value) is not Decimal or not self.expected_value.is_finite()
+        ):
+            raise ValueError("expected value must be a finite Decimal")
+
+        if type(self.stake_units) is not int:
+            raise ValueError("stake units must be an integer")
+        required_units = 1 if (
+            self.stage is PlanStage.FINAL and self.decision is Decision.SELECT
+        ) else 0
+        if self.stake_units != required_units:
+            raise ValueError(f"stake units must be {required_units} for this decision")
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
             raise ValueError("as_of must be timezone-aware")
 
@@ -63,9 +92,9 @@ class Recommendation:
         if any(not reason for reason in normalized_reasons):
             raise ValueError("reason codes must not contain empty values")
         object.__setattr__(self, "reason_codes", normalized_reasons)
+        if self.stage is PlanStage.FINAL and not self.reason_codes:
+            raise ValueError("final recommendations require reason codes")
 
-        if self.odds is not None and self.odds <= Decimal("0"):
-            raise ValueError("odds must be positive")
         if self.stage is PlanStage.PREPLAN:
             if self.decision is Decision.SELECT:
                 raise ValueError("preplan cannot be a final selection")
@@ -74,5 +103,3 @@ class Recommendation:
         elif self.decision is Decision.SELECT:
             if self.odds is None or self.expected_value is None:
                 raise ValueError("final selection requires odds and expected value")
-        elif not self.reason_codes:
-            raise ValueError("final pass requires reason codes")
