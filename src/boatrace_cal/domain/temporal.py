@@ -1,7 +1,7 @@
 """Prediction-time availability contracts."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def _require_aware(value: datetime, name: str) -> None:
@@ -21,5 +21,7 @@ class AvailableRecord:
     def assert_usable_at(self, as_of: datetime) -> None:
         """Raise when this record was not available at the prediction time."""
         _require_aware(as_of, "as_of")
-        if self.available_at > as_of:
+        available_at_utc = self.available_at.astimezone(timezone.utc)
+        as_of_utc = as_of.astimezone(timezone.utc)
+        if available_at_utc > as_of_utc:
             raise ValueError("record is not available at the prediction time")
