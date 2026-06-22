@@ -1,0 +1,21 @@
+"""Stable error taxonomy shared by ingestion, modelling, and strategy layers."""
+
+from enum import StrEnum
+
+
+class ErrorCode(StrEnum):
+    """Machine-readable error categories recorded in auditable artifacts."""
+
+    SOURCE_UNAVAILABLE = "SOURCE_UNAVAILABLE"
+    MISSED_WINDOW = "MISSED_WINDOW"
+    FETCH_TIMEOUT = "FETCH_TIMEOUT"
+    RATE_LIMITED = "RATE_LIMITED"
+    PARSE_SCHEMA_CHANGED = "PARSE_SCHEMA_CHANGED"
+    DQ_MISSING_ENTRY = "DQ_MISSING_ENTRY"
+    DQ_STALE_ODDS = "DQ_STALE_ODDS"
+    DQ_INCOMPLETE_ODDS = "DQ_INCOMPLETE_ODDS"
+    DQ_TIME_LEAK_RISK = "DQ_TIME_LEAK_RISK"
+    MODEL_NOT_READY = "MODEL_NOT_READY"
+    CALIBRATION_INVALID = "CALIBRATION_INVALID"
+    STRATEGY_RISK_LIMIT = "STRATEGY_RISK_LIMIT"
+    VERSION_CONFLICT = "VERSION_CONFLICT"
