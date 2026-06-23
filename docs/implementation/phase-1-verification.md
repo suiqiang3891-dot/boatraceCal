@@ -5,7 +5,7 @@
 - 验证日期：2026-06-23
 - 工作树：`D:\boatraceCal\.worktrees\phase-1-domain-contracts`
 - 分支：`feature/phase-1-domain-contracts`
-- 最终契约验证基线 HEAD：`13e37d0`
+- 最终契约验证基线 HEAD：`a524ce7`
 - 实际解释器：Python 3.14.2
 - 项目最低版本声明：Python 3.12（`requires-python = ">=3.12"`）
 
@@ -27,7 +27,7 @@ Python 3.12 未在本次工作树中执行，因此不声称已验证。
 
 | 精确命令 | 退出码 | 观测结果 |
 | --- | ---: | --- |
-| `python -m pytest` | 0 | 收集并通过 237 项测试；最终复验为 `237 passed in 0.69s` |
+| `python -m pytest` | 0 | 收集并通过 244 项测试；最终复验为 `244 passed` |
 | `python -m ruff check .` | 0 | `All checks passed!` |
 | `python -m mypy src` | 0 | `Success: no issues found in 11 source files` |
 | `git diff --check 9659b47..HEAD` | 0 | 未发现空白错误 |
