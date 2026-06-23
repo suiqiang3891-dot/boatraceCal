@@ -1,5 +1,5 @@
 from dataclasses import FrozenInstanceError
-from datetime import timedelta
+from datetime import timedelta, timezone
 import os
 from pathlib import Path
 import subprocess
@@ -86,6 +86,91 @@ def test_config_dataclasses_are_frozen_and_slotted() -> None:
     assert not hasattr(config.pilot, "__dict__")
     assert not hasattr(config.snapshots, "__dict__")
     assert not hasattr(config.retention, "__dict__")
+
+
+def test_public_config_constructors_enforce_domain_types() -> None:
+    business_timezone = timezone(timedelta(hours=9), name="Asia/Tokyo")
+    project = ProjectConfig(timezone=business_timezone)
+    pilot = PilotConfig(venue=VenueCode("01"))
+    snapshots = SnapshotConfig(targets=[SnapshotTarget.T30, SnapshotTarget.T05])  # type: ignore[arg-type]
+    retention = RetentionConfig(anomaly_response_days=1)
+
+    assert snapshots.targets == (SnapshotTarget.T30, SnapshotTarget.T05)
+    assert hash(project)
+    assert hash(pilot)
+    assert hash(snapshots)
+    assert hash(retention)
+    assert hash(
+        AppConfig(
+            project=project,
+            pilot=pilot,
+            snapshots=snapshots,
+            retention=retention,
+        )
+    )
+
+
+def test_snapshot_config_copies_list_input() -> None:
+    targets = [SnapshotTarget.T30]
+    config = SnapshotConfig(targets=targets)  # type: ignore[arg-type]
+
+    targets.append(SnapshotTarget.T15)
+
+    assert config.targets == (SnapshotTarget.T30,)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Asia/Tokyo",
+        timezone(timedelta(hours=9)),
+        timezone(timedelta(hours=8), name="Asia/Tokyo"),
+    ],
+)
+def test_project_config_rejects_noncanonical_timezone(value: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        ProjectConfig(timezone=value)  # type: ignore[arg-type]
+
+
+def test_nested_config_constructors_reject_lookalike_values() -> None:
+    with pytest.raises(TypeError):
+        PilotConfig(venue="01")  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        SnapshotConfig(targets=("T30",))  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        SnapshotConfig(targets=())
+    with pytest.raises(ValueError):
+        SnapshotConfig(targets=(SnapshotTarget.T30, SnapshotTarget.T30))
+    with pytest.raises(ValueError):
+        SnapshotConfig(targets=(SnapshotTarget.HISTORICAL,))
+    with pytest.raises(TypeError):
+        RetentionConfig(anomaly_response_days=True)
+    with pytest.raises(ValueError):
+        RetentionConfig(anomaly_response_days=0)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("project", object()),
+        ("pilot", object()),
+        ("snapshots", object()),
+        ("retention", object()),
+    ],
+)
+def test_app_config_rejects_invalid_nested_type(field: str, value: object) -> None:
+    values = {
+        "project": ProjectConfig(
+            timezone=timezone(timedelta(hours=9), name="Asia/Tokyo")
+        ),
+        "pilot": PilotConfig(venue=VenueCode("01")),
+        "snapshots": SnapshotConfig(targets=(SnapshotTarget.T30,)),
+        "retention": RetentionConfig(anomaly_response_days=30),
+    }
+    values[field] = value
+
+    with pytest.raises(TypeError):
+        AppConfig(**values)  # type: ignore[arg-type]
 
 
 def test_missing_config_file_raises_file_not_found() -> None:

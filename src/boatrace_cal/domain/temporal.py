@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 
-def _require_aware(value: datetime, name: str) -> None:
+def _require_aware(value: object, name: str) -> None:
+    if type(value) is not datetime:
+        raise ValueError(f"{name} must be a datetime")
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{name} must be timezone-aware")
 

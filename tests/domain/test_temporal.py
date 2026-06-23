@@ -6,6 +6,17 @@ import pytest
 from boatrace_cal.domain.temporal import AvailableRecord
 
 
+class DateTimeSubclass(datetime):
+    pass
+
+
+class AwareDateTimeDuck:
+    tzinfo = UTC
+
+    def utcoffset(self) -> timedelta:
+        return timedelta(0)
+
+
 def test_available_record_rejects_future_availability() -> None:
     as_of = datetime(2026, 6, 23, 10, 0, tzinfo=UTC)
     record = AvailableRecord(available_at=as_of + timedelta(seconds=1))
@@ -24,6 +35,40 @@ def test_available_record_rejects_naive_as_of() -> None:
 
     with pytest.raises(ValueError):
         record.assert_usable_at(datetime(2026, 6, 23, 10, 0))
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-06-23T10:00:00+00:00",
+        AwareDateTimeDuck(),
+        DateTimeSubclass(2026, 6, 23, 10, 0, tzinfo=UTC),
+    ],
+)
+def test_available_record_rejects_non_exact_datetime(value: object) -> None:
+    with pytest.raises(ValueError):
+        AvailableRecord(available_at=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-06-23T10:00:00+00:00",
+        AwareDateTimeDuck(),
+        DateTimeSubclass(2026, 6, 23, 10, 0, tzinfo=UTC),
+    ],
+)
+def test_assert_usable_at_rejects_non_exact_datetime(value: object) -> None:
+    record = AvailableRecord(available_at=datetime(2026, 6, 23, 10, 0, tzinfo=UTC))
+
+    with pytest.raises(ValueError):
+        record.assert_usable_at(value)  # type: ignore[arg-type]
+
+
+def test_available_record_remains_hashable() -> None:
+    record = AvailableRecord(available_at=datetime(2026, 6, 23, 10, 0, tzinfo=UTC))
+
+    assert hash(record)
 
 
 def test_available_record_is_usable_at_exact_availability_time() -> None:

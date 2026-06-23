@@ -1,7 +1,7 @@
 """Strict standard-library configuration loading."""
 
 from dataclasses import dataclass
-from datetime import timedelta, timezone, tzinfo
+from datetime import timedelta, timezone
 from pathlib import Path
 import tomllib
 from typing import Any
@@ -18,22 +18,30 @@ _TABLE_FIELDS = {
 }
 _BUSINESS_TIMEZONE_NAME = "Asia/Tokyo"
 _BUSINESS_TIMEZONE = timezone(timedelta(hours=9), name=_BUSINESS_TIMEZONE_NAME)
-_REALTIME_TARGETS = {
-    target.value: target
-    for target in (
+_REALTIME_TARGETS = frozenset(
+    (
         SnapshotTarget.T30,
         SnapshotTarget.T15,
         SnapshotTarget.T10,
         SnapshotTarget.T05,
     )
-}
+)
 
 
 @dataclass(frozen=True, slots=True)
 class ProjectConfig:
     """Project-wide time semantics."""
 
-    timezone: tzinfo
+    timezone: timezone
+
+    def __post_init__(self) -> None:
+        if type(self.timezone) is not timezone:
+            raise TypeError("project timezone must be a datetime.timezone")
+        if (
+            self.timezone.utcoffset(None) != timedelta(hours=9)
+            or self.timezone.tzname(None) != _BUSINESS_TIMEZONE_NAME
+        ):
+            raise ValueError("project timezone must be Asia/Tokyo at UTC+09:00")
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +50,10 @@ class PilotConfig:
 
     venue: VenueCode
 
+    def __post_init__(self) -> None:
+        if type(self.venue) is not VenueCode:
+            raise TypeError("pilot venue must be a VenueCode")
+
 
 @dataclass(frozen=True, slots=True)
 class SnapshotConfig:
@@ -49,12 +61,32 @@ class SnapshotConfig:
 
     targets: tuple[SnapshotTarget, ...]
 
+    def __post_init__(self) -> None:
+        if type(self.targets) not in (list, tuple):
+            raise TypeError("snapshot targets must be a list or tuple")
+        targets = tuple(self.targets)
+        if not targets:
+            raise ValueError("snapshot targets must not be empty")
+        if any(type(target) is not SnapshotTarget for target in targets):
+            raise TypeError("snapshot targets must be SnapshotTarget instances")
+        if len(set(targets)) != len(targets):
+            raise ValueError("snapshot targets must not contain duplicates")
+        if any(target not in _REALTIME_TARGETS for target in targets):
+            raise ValueError("snapshot targets must contain only real-time targets")
+        object.__setattr__(self, "targets", targets)
+
 
 @dataclass(frozen=True, slots=True)
 class RetentionConfig:
     """Retention periods for exceptional source responses."""
 
     anomaly_response_days: int
+
+    def __post_init__(self) -> None:
+        if type(self.anomaly_response_days) is not int:
+            raise TypeError("retention days must be an integer")
+        if self.anomaly_response_days < 1:
+            raise ValueError("retention days must be at least one")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +97,17 @@ class AppConfig:
     pilot: PilotConfig
     snapshots: SnapshotConfig
     retention: RetentionConfig
+
+    def __post_init__(self) -> None:
+        expected_types = (
+            ("project", self.project, ProjectConfig),
+            ("pilot", self.pilot, PilotConfig),
+            ("snapshots", self.snapshots, SnapshotConfig),
+            ("retention", self.retention, RetentionConfig),
+        )
+        for name, value, expected_type in expected_types:
+            if type(value) is not expected_type:
+                raise TypeError(f"{name} must be a {expected_type.__name__}")
 
 
 def _validate_shape(data: dict[str, Any]) -> None:
@@ -87,7 +130,7 @@ def _require_string(value: object, field: str) -> str:
     return value
 
 
-def _load_timezone(value: object) -> tzinfo:
+def _load_timezone(value: object) -> timezone:
     name = _require_string(value, "project.timezone")
     if name != _BUSINESS_TIMEZONE_NAME:
         raise ValueError(f"unsupported business timezone: {name}")
@@ -97,26 +140,12 @@ def _load_timezone(value: object) -> tzinfo:
 def _load_targets(value: object) -> tuple[SnapshotTarget, ...]:
     if type(value) is not list:
         raise TypeError("snapshots.targets must be an array")
-    if not value:
-        raise ValueError("snapshots.targets must not be empty")
     if any(type(item) is not str for item in value):
         raise TypeError("snapshots.targets entries must be strings")
-
-    names = tuple(value)
-    if len(set(names)) != len(names):
-        raise ValueError("snapshots.targets must not contain duplicates")
     try:
-        return tuple(_REALTIME_TARGETS[name] for name in names)
-    except KeyError as error:
-        raise ValueError(f"unsupported real-time snapshot target: {error.args[0]}") from error
-
-
-def _load_retention_days(value: object) -> int:
-    if type(value) is not int:
-        raise TypeError("retention.anomaly_response_days must be an integer")
-    if value < 1:
-        raise ValueError("retention.anomaly_response_days must be at least one")
-    return value
+        return tuple(SnapshotTarget(item) for item in value)
+    except ValueError as error:
+        raise ValueError(f"unsupported snapshot target: {error.args[0]}") from error
 
 
 def load_config(path: Path | str) -> AppConfig:
@@ -133,8 +162,6 @@ def load_config(path: Path | str) -> AppConfig:
         ),
         snapshots=SnapshotConfig(targets=_load_targets(data["snapshots"]["targets"])),
         retention=RetentionConfig(
-            anomaly_response_days=_load_retention_days(
-                data["retention"]["anomaly_response_days"]
-            )
+            anomaly_response_days=data["retention"]["anomaly_response_days"]
         ),
     )
