@@ -1,10 +1,10 @@
 """Strict standard-library configuration loading."""
 
 from dataclasses import dataclass
+from datetime import timedelta, timezone, tzinfo
 from pathlib import Path
 import tomllib
 from typing import Any
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from boatrace_cal.domain.races import VenueCode
 from boatrace_cal.jobs.contracts import SnapshotTarget
@@ -16,6 +16,8 @@ _TABLE_FIELDS = {
     "snapshots": frozenset({"targets"}),
     "retention": frozenset({"anomaly_response_days"}),
 }
+_BUSINESS_TIMEZONE_NAME = "Asia/Tokyo"
+_BUSINESS_TIMEZONE = timezone(timedelta(hours=9), name=_BUSINESS_TIMEZONE_NAME)
 _REALTIME_TARGETS = {
     target.value: target
     for target in (
@@ -31,7 +33,7 @@ _REALTIME_TARGETS = {
 class ProjectConfig:
     """Project-wide time semantics."""
 
-    timezone: ZoneInfo
+    timezone: tzinfo
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,12 +87,11 @@ def _require_string(value: object, field: str) -> str:
     return value
 
 
-def _load_timezone(value: object) -> ZoneInfo:
+def _load_timezone(value: object) -> tzinfo:
     name = _require_string(value, "project.timezone")
-    try:
-        return ZoneInfo(name)
-    except ZoneInfoNotFoundError as error:
-        raise ValueError(f"unknown timezone: {name}") from error
+    if name != _BUSINESS_TIMEZONE_NAME:
+        raise ValueError(f"unsupported business timezone: {name}")
+    return _BUSINESS_TIMEZONE
 
 
 def _load_targets(value: object) -> tuple[SnapshotTarget, ...]:

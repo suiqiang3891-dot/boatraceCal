@@ -1,6 +1,9 @@
 from dataclasses import FrozenInstanceError
+from datetime import timedelta
+import os
 from pathlib import Path
-from zoneinfo import ZoneInfo
+import subprocess
+import sys
 
 import pytest
 
@@ -29,7 +32,7 @@ def test_loads_default_config() -> None:
     config = load_config(DEFAULT_CONFIG)
 
     assert config == AppConfig(
-        project=ProjectConfig(timezone=ZoneInfo("Asia/Tokyo")),
+        project=ProjectConfig(timezone=config.project.timezone),
         pilot=PilotConfig(venue=VenueCode("01")),
         snapshots=SnapshotConfig(
             targets=(
@@ -41,6 +44,36 @@ def test_loads_default_config() -> None:
         ),
         retention=RetentionConfig(anomaly_response_days=30),
     )
+    assert config.project.timezone.utcoffset(None) == timedelta(hours=9)
+    assert config.project.timezone.tzname(None) == "Asia/Tokyo"
+
+
+def test_default_config_loads_without_site_packages() -> None:
+    source_root = Path(__file__).parents[1] / "src"
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = os.pathsep.join(
+        filter(None, (str(source_root), environment.get("PYTHONPATH", "")))
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            "-c",
+            (
+                "from boatrace_cal.config import load_config; "
+                f"config = load_config({str(DEFAULT_CONFIG)!r}); "
+                "print(config.project.timezone.tzname(None))"
+            ),
+        ],
+        check=False,
+        capture_output=True,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Asia/Tokyo"
 
 
 def test_config_dataclasses_are_frozen_and_slotted() -> None:
@@ -172,10 +205,10 @@ anomaly_response_days = {days}
         load_config(_write_config(tmp_path, content))
 
 
-def test_rejects_unknown_timezone(tmp_path: Path) -> None:
+def test_rejects_unsupported_business_timezone(tmp_path: Path) -> None:
     content = """
 [project]
-timezone = "Mars/Olympus"
+timezone = "Asia/Shanghai"
 [pilot]
 venue = "01"
 [snapshots]
@@ -184,5 +217,5 @@ targets = ["T30"]
 anomaly_response_days = 30
 """
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="unsupported business timezone"):
         load_config(_write_config(tmp_path, content))
