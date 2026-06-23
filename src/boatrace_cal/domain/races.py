@@ -11,6 +11,8 @@ class VenueCode:
     value: str
 
     def __post_init__(self) -> None:
+        if type(self.value) is not str:
+            raise ValueError("venue code must be a string")
         if (
             not self.value.isascii()
             or not self.value.isdigit()
@@ -33,6 +35,12 @@ class RaceId:
     race_no: int
 
     def __post_init__(self) -> None:
+        if type(self.race_date) is not date:
+            raise ValueError("race date must be a date")
+        if type(self.venue) is not VenueCode:
+            raise ValueError("venue must be a VenueCode")
+        if type(self.race_no) is not int:
+            raise ValueError("race number must be an integer")
         if not 1 <= self.race_no <= 12:
             raise ValueError("race number must be between 1 and 12")
 

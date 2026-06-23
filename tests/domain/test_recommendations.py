@@ -248,3 +248,42 @@ def test_recommendation_uses_slots() -> None:
     recommendation = make_recommendation()
 
     assert not hasattr(recommendation, "__dict__")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("race_id", "20260623-01-01"),
+        ("combination", (1, 2, 3)),
+        ("versions", {"model": "model-v1"}),
+    ],
+)
+def test_recommendation_rejects_invalid_nested_domain_types(
+    field: str, value: object
+) -> None:
+    with pytest.raises(ValueError, match=field.replace("_", " ")):
+        make_recommendation(**{field: value})
+
+
+@pytest.mark.parametrize("as_of", ["2026-06-23T10:00:00Z", date(2026, 6, 23)])
+def test_recommendation_rejects_non_datetime_as_of(as_of: object) -> None:
+    with pytest.raises(ValueError, match="as_of"):
+        make_recommendation(as_of=as_of)
+
+
+@pytest.mark.parametrize(
+    "reason_codes",
+    [["positive_ev"], b"positive_ev", ("positive_ev", 1), (object(),)],
+)
+def test_recommendation_rejects_invalid_reason_code_container_or_elements(
+    reason_codes: object,
+) -> None:
+    with pytest.raises(ValueError, match="reason codes"):
+        make_recommendation(reason_codes=reason_codes)
+
+
+def test_recommendation_is_hashable_with_valid_nested_values() -> None:
+    recommendation = make_recommendation()
+
+    assert hash(recommendation) == hash(make_recommendation())
+    assert {recommendation: "selected"}[make_recommendation()] == "selected"

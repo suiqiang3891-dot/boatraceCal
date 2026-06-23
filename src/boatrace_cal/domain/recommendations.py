@@ -51,6 +51,12 @@ class Recommendation:
     reason_codes: tuple[str, ...]
 
     def __post_init__(self) -> None:
+        if type(self.race_id) is not RaceId:
+            raise ValueError("race id must be a RaceId")
+        if type(self.combination) is not BetCombination:
+            raise ValueError("combination must be a BetCombination")
+        if type(self.versions) is not ArtifactVersions:
+            raise ValueError("versions must be ArtifactVersions")
         if type(self.stage) is not PlanStage:
             raise ValueError("stage must be a PlanStage")
         if type(self.decision) is not Decision:
@@ -85,9 +91,15 @@ class Recommendation:
         ) else 0
         if self.stake_units != required_units:
             raise ValueError(f"stake units must be {required_units} for this decision")
+        if type(self.as_of) is not datetime:
+            raise ValueError("as_of must be a datetime")
         if self.as_of.tzinfo is None or self.as_of.utcoffset() is None:
             raise ValueError("as_of must be timezone-aware")
 
+        if type(self.reason_codes) is not tuple or any(
+            type(reason) is not str for reason in self.reason_codes
+        ):
+            raise ValueError("reason codes must be a tuple of strings")
         normalized_reasons = tuple(reason.strip() for reason in self.reason_codes)
         if any(not reason for reason in normalized_reasons):
             raise ValueError("reason codes must not contain empty values")

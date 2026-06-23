@@ -14,7 +14,10 @@ class ArtifactVersions:
 
     def __post_init__(self) -> None:
         for name in ("data", "feature", "model", "strategy"):
-            value = getattr(self, name).strip()
+            value = getattr(self, name)
+            if type(value) is not str:
+                raise ValueError(f"{name} version must be a string")
+            value = value.strip()
             if not value:
                 raise ValueError(f"{name} version must not be empty")
             object.__setattr__(self, name, value)

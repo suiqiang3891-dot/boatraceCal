@@ -46,3 +46,28 @@ def test_artifact_versions_rejects_empty_values(field: str, invalid_value: str) 
 
     with pytest.raises(ValueError):
         ArtifactVersions(**values)
+
+
+@pytest.mark.parametrize("invalid_value", [b"data-v1", 1, object()])
+@pytest.mark.parametrize("field", ["data", "feature", "model", "strategy"])
+def test_artifact_versions_rejects_non_string_values(
+    field: str, invalid_value: object
+) -> None:
+    values: dict[str, object] = {
+        "data": "data-v1",
+        "feature": "feature-v1",
+        "model": "model-v1",
+        "strategy": "strategy-v1",
+    }
+    values[field] = invalid_value
+
+    with pytest.raises(ValueError, match=f"{field} version must be a string"):
+        ArtifactVersions(**values)  # type: ignore[arg-type]
+
+
+def test_artifact_versions_rejects_string_subclasses() -> None:
+    class StringLike(str):
+        pass
+
+    with pytest.raises(ValueError, match="data version must be a string"):
+        ArtifactVersions(StringLike("data-v1"), "feature-v1", "model-v1", "strategy-v1")
