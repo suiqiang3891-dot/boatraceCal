@@ -3,8 +3,12 @@
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
+import re
 
 from boatrace_cal.domain.races import VenueCode
+
+
+_CANONICAL_TOKEN = re.compile(r"[A-Za-z0-9._-]+", flags=re.ASCII)
 
 
 class SnapshotTarget(StrEnum):
@@ -83,6 +87,10 @@ class JobKey:
             raise ValueError("source must not be blank")
         if not data_type:
             raise ValueError("data_type must not be blank")
+        if _CANONICAL_TOKEN.fullmatch(source) is None:
+            raise ValueError("source must be a canonical token")
+        if _CANONICAL_TOKEN.fullmatch(data_type) is None:
+            raise ValueError("data_type must be a canonical token")
         if self.race_no is not None and not 1 <= self.race_no <= 12:
             raise ValueError("race_no must be between 1 and 12")
 

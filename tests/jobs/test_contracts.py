@@ -1,3 +1,4 @@
+from dataclasses import FrozenInstanceError
 from datetime import date, datetime
 
 import pytest
@@ -83,6 +84,37 @@ def test_job_key_uses_wildcard_for_date_level_job() -> None:
     assert job.key == "official|01|2026-06-23|*|entries|historical"
 
 
+@pytest.mark.parametrize(
+    ("source", "data_type"),
+    [("official|01", "odds"), ("official", "odds|T15")],
+)
+def test_job_key_rejects_fields_that_could_collide_with_key_segments(
+    source: str, data_type: str
+) -> None:
+    with pytest.raises(ValueError, match="canonical token"):
+        JobKey(
+            source=source,
+            venue=VenueCode("01"),
+            race_date=date(2026, 6, 23),
+            race_no=1,
+            data_type=data_type,
+            snapshot_target=SnapshotTarget.T15,
+        )
+
+
+@pytest.mark.parametrize("value", ["two words", "日本", "odds/type", "odds:type", "odds@type"])
+def test_job_key_rejects_noncanonical_tokens(value: str) -> None:
+    with pytest.raises(ValueError, match="canonical token"):
+        JobKey(
+            source="official",
+            venue=VenueCode("01"),
+            race_date=date(2026, 6, 23),
+            race_no=1,
+            data_type=value,
+            snapshot_target=SnapshotTarget.T15,
+        )
+
+
 @pytest.mark.parametrize("field", ["source", "data_type"])
 @pytest.mark.parametrize("value", ["", "   "])
 def test_job_key_rejects_blank_text(field: str, value: str) -> None:
@@ -144,3 +176,39 @@ def test_job_key_rejects_out_of_range_race_number(race_no: int) -> None:
 def test_job_enums_have_unique_values() -> None:
     assert len({target.value for target in SnapshotTarget}) == len(SnapshotTarget)
     assert len({status.value for status in JobStatus}) == len(JobStatus)
+
+
+def test_snapshot_target_members_match_the_contract() -> None:
+    assert {member.name: member.value for member in SnapshotTarget} == {
+        "HISTORICAL": "historical",
+        "T30": "T30",
+        "T15": "T15",
+        "T10": "T10",
+        "T05": "T05",
+    }
+
+
+def test_job_status_members_match_the_contract() -> None:
+    assert {member.name: member.value for member in JobStatus} == {
+        "PENDING": "pending",
+        "RUNNING": "running",
+        "RETRY_WAIT": "retry_wait",
+        "SUCCEEDED": "succeeded",
+        "FAILED": "failed",
+        "SKIPPED": "skipped",
+    }
+
+
+def test_job_key_is_frozen_and_uses_slots() -> None:
+    job = JobKey(
+        source="official",
+        venue=VenueCode("01"),
+        race_date=date(2026, 6, 23),
+        race_no=1,
+        data_type="odds",
+        snapshot_target=SnapshotTarget.T30,
+    )
+
+    assert not hasattr(job, "__dict__")
+    with pytest.raises(FrozenInstanceError):
+        job.race_no = 2  # type: ignore[misc]
