@@ -59,6 +59,19 @@ def test_recommendation_rejects_empty_identifier(recommendation_id: str) -> None
         make_recommendation(recommendation_id=recommendation_id)
 
 
+class StripLikeIdentifier:
+    def strip(self) -> str:
+        return "rec-1"
+
+
+@pytest.mark.parametrize("recommendation_id", [b"rec-1", 1, StripLikeIdentifier()])
+def test_recommendation_rejects_non_string_identifier(
+    recommendation_id: object,
+) -> None:
+    with pytest.raises(ValueError, match="recommendation id"):
+        make_recommendation(recommendation_id=recommendation_id)
+
+
 @pytest.mark.parametrize("probability", [Decimal("-0.01"), Decimal("1.01")])
 def test_recommendation_rejects_probability_outside_unit_interval(
     probability: Decimal,

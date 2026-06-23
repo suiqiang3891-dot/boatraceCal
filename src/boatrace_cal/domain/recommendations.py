@@ -64,6 +64,8 @@ class Recommendation:
         if type(self.confidence) is not ConfidenceLevel:
             raise ValueError("confidence must be a ConfidenceLevel")
 
+        if type(self.recommendation_id) is not str:
+            raise ValueError("recommendation id must be a string")
         recommendation_id = self.recommendation_id.strip()
         if not recommendation_id:
             raise ValueError("recommendation id must not be empty")

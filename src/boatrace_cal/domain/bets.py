@@ -33,6 +33,13 @@ class BetCombination:
     def __post_init__(self) -> None:
         if not isinstance(self.bet_type, BetType):
             raise ValueError("bet type must be a BetType")
+        if isinstance(self.lanes, (str, bytes, bytearray)):
+            raise ValueError("bet lanes must be an iterable of integers")
+        try:
+            lanes = tuple(self.lanes)
+        except TypeError as exc:
+            raise ValueError("bet lanes must be an iterable of integers") from exc
+        object.__setattr__(self, "lanes", lanes)
         if len(self.lanes) != self.bet_type.lane_count:
             raise ValueError(f"{self.bet_type} requires {self.bet_type.lane_count} lanes")
         if any(type(lane) is not int for lane in self.lanes):
@@ -46,7 +53,7 @@ class BetCombination:
 
     @classmethod
     def create(cls, bet_type: BetType, lanes: Iterable[int]) -> "BetCombination":
-        return cls(bet_type=bet_type, lanes=tuple(lanes))
+        return cls(bet_type=bet_type, lanes=lanes)  # type: ignore[arg-type]
 
     @property
     def key(self) -> str:

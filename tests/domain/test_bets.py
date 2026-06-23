@@ -40,6 +40,25 @@ def test_direct_constructor_normalizes_box_lane_order() -> None:
     assert combination.lanes == (1, 2, 3)
 
 
+def test_direct_ordered_constructor_copies_lanes_into_hashable_tuple() -> None:
+    lanes = [2, 1]
+
+    combination = BetCombination(BetType.EXACTA_ORDERED, lanes)  # type: ignore[arg-type]
+    lanes[0] = 1
+
+    assert combination.lanes == (2, 1)
+    assert type(combination.lanes) is tuple
+    assert hash(combination) == hash(BetCombination(BetType.EXACTA_ORDERED, (2, 1)))
+
+
+@pytest.mark.parametrize("lanes", ["12", 12, [1, "2"]])
+def test_direct_constructor_rejects_invalid_lane_container_or_elements(
+    lanes: object,
+) -> None:
+    with pytest.raises(ValueError, match="bet lanes"):
+        BetCombination(BetType.EXACTA_ORDERED, lanes)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize("lanes", [(1, 1), (0, 1), (1, 7)])
 def test_direct_constructor_rejects_invalid_lanes(lanes: tuple[int, int]) -> None:
     with pytest.raises(ValueError):
