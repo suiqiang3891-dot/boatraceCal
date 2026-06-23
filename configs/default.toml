@@ -1,0 +1,11 @@
+[project]
+timezone = "Asia/Tokyo"
+
+[pilot]
+venue = "01"
+
+[snapshots]
+targets = ["T30", "T15", "T10", "T05"]
+
+[retention]
+anomaly_response_days = 30
