@@ -5,7 +5,7 @@
 - 验证日期：2026-06-23
 - 工作树：`D:\boatraceCal\.worktrees\phase-1-domain-contracts`
 - 分支：`feature/phase-1-domain-contracts`
-- 最终契约验证基线 HEAD：`a524ce7`
+- 被审查源码 HEAD：`abcf620`（本验证记录提交紧随其后，不改变源码树）
 - 实际解释器：Python 3.14.2
 - 项目最低版本声明：Python 3.12（`requires-python = ">=3.12"`）
 
@@ -27,11 +27,11 @@ Python 3.12 未在本次工作树中执行，因此不声称已验证。
 
 | 精确命令 | 退出码 | 观测结果 |
 | --- | ---: | --- |
-| `python -m pytest` | 0 | 收集并通过 244 项测试；最终复验为 `244 passed` |
+| `python -m pytest` | 0 | 收集并通过 261 项测试；最终复验为 `261 passed` |
 | `python -m ruff check .` | 0 | `All checks passed!` |
 | `python -m mypy src` | 0 | `Success: no issues found in 11 source files` |
 | `git diff --check 9659b47..HEAD` | 0 | 未发现空白错误 |
-| `git interpret-trailers --parse` | 0 | 功能分支 16 个历史提交均可解析至少 5 个 Lore trailers |
+| `git interpret-trailers --parse` | 0 | 功能分支 21 个实施及证据提交均可解析至少 5 个 Lore trailers |
 | `git status` | 0 | 分支为 `feature/phase-1-domain-contracts`，验证前工作树干净；另有两条无法读取 `C:\Users\sq/.config/git/ignore` 的权限警告 |
 
 `git status` 的用户级 ignore 权限警告未影响退出码或工作树状态，但属于环境噪声，
