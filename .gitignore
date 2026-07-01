@@ -7,6 +7,7 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+.codegraph/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
