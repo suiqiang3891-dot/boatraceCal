@@ -1,0 +1,3 @@
+race_date,venue,race_no,bet_type,combination,payout_yen,source,source_hash,observed_at,available_at,parser_version
+2025-01-02,01,1,trifecta_ordered,1-2-3,1100,sample-payouts,sample-payout-1,2025-01-02T16:00:00+00:00,2025-01-02T16:00:00+00:00,payouts-sample-v1
+2025-01-02,01,2,trifecta_ordered,3-1-2,900,sample-payouts,sample-payout-2,2025-01-02T16:20:00+00:00,2025-01-02T16:20:00+00:00,payouts-sample-v1
