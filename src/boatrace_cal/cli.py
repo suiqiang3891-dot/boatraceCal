@@ -8,9 +8,12 @@ from datetime import date
 import json
 from pathlib import Path
 
+from boatrace_cal.backtest.export import export_backtest_report_json
+from boatrace_cal.backtest.runner import run_backtest
 from boatrace_cal.domain.bets import BetType
 from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.ingestion.payouts import load_payouts_csv
+from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
 from boatrace_cal.validation.data_quality import build_historical_data_quality_report
 from boatrace_cal.validation.serialization import historical_data_quality_report_to_dict
@@ -21,6 +24,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.command == "backtest-report":
+        return _run_backtest_report(args)
     if args.command == "historical-quality-report":
         return _run_historical_quality_report(args)
     parser.print_help()
@@ -42,7 +47,30 @@ def _build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--expected-race", required=True, action="append")
     quality.add_argument("--bet-type", required=True, action="append")
     quality.add_argument("--output", required=True, type=Path)
+
+    backtest = subparsers.add_parser(
+        "backtest-report",
+        help="Run a historical paper backtest and write a JSON report.",
+    )
+    backtest.add_argument("--recommendations", required=True, type=Path)
+    backtest.add_argument("--results", required=True, type=Path)
+    backtest.add_argument("--payouts", required=True, type=Path)
+    backtest.add_argument("--expected-race", required=True, action="append")
+    backtest.add_argument("--bet-type", required=True, action="append")
+    backtest.add_argument("--output", required=True, type=Path)
     return parser
+
+
+def _run_backtest_report(args: argparse.Namespace) -> int:
+    report = run_backtest(
+        recommendations=load_recommendations_csv(args.recommendations),
+        results=load_results_csv(args.results),
+        payouts=load_payouts_csv(args.payouts),
+        expected_races=tuple(_parse_race_id(value) for value in args.expected_race),
+        bet_types=tuple(BetType(value) for value in args.bet_type),
+    )
+    export_backtest_report_json(report, args.output)
+    return 0
 
 
 def _run_historical_quality_report(args: argparse.Namespace) -> int:
