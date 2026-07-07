@@ -44,11 +44,16 @@ def test_run_backtest_returns_settlements_summary_and_equity_when_ready() -> Non
     assert report.settlements is not None
     assert report.summary is not None
     assert report.equity_curve is not None
+    assert report.slices is not None
     assert tuple(row.recommendation_id for row in report.settlements) == ("rec-hit", "rec-miss")
     assert report.summary.selected_bet_count == 2
     assert report.summary.net_profit_yen == Decimal("1000")
     assert report.equity_curve.final_equity_yen == Decimal("1000")
     assert report.equity_curve.max_drawdown_yen == Decimal("100")
+    assert [(item.dimension, item.key) for item in report.slices] == [
+        ("venue", "01"),
+        ("bet_type", "trifecta_ordered"),
+    ]
 
 
 def test_run_backtest_blocks_without_settlement_outputs_when_preflight_fails() -> None:
@@ -67,6 +72,7 @@ def test_run_backtest_blocks_without_settlement_outputs_when_preflight_fails() -
     assert report.settlements is None
     assert report.summary is None
     assert report.equity_curve is None
+    assert report.slices is None
 
 
 def _recommendation(

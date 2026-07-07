@@ -17,18 +17,25 @@ from boatrace_cal.backtest.settlement import (
     BacktestSettlementRow,
     settle_selected_recommendations,
 )
-from boatrace_cal.backtest.summary import BacktestSummary, summarize_backtest_settlements
+from boatrace_cal.backtest.summary import (
+    BacktestSlice,
+    BacktestSummary,
+    build_backtest_slices,
+    summarize_backtest_settlements,
+)
 
 __all__ = [
     "BacktestReadiness",
     "BacktestReadinessStatus",
     "BacktestReport",
     "BacktestSettlementRow",
+    "BacktestSlice",
     "BacktestSummary",
     "EquityCurve",
     "EquityCurvePoint",
     "backtest_report_to_dict",
     "build_equity_curve",
+    "build_backtest_slices",
     "check_backtest_inputs_ready",
     "export_backtest_report_json",
     "run_backtest",

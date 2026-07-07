@@ -6,7 +6,7 @@ from typing import Any
 from boatrace_cal.backtest.equity import EquityCurve, EquityCurvePoint
 from boatrace_cal.backtest.runner import BacktestReport
 from boatrace_cal.backtest.settlement import BacktestSettlementRow
-from boatrace_cal.backtest.summary import BacktestSummary
+from boatrace_cal.backtest.summary import BacktestSlice, BacktestSummary
 from boatrace_cal.domain.bets import BetCombination
 from boatrace_cal.domain.races import RaceId
 from boatrace_cal.settlement import SettlementResult
@@ -42,6 +42,7 @@ def backtest_report_to_dict(report: BacktestReport) -> dict[str, JsonValue]:
         "equity_curve": None
         if report.equity_curve is None
         else _equity_curve_to_dict(report.equity_curve),
+        "slices": None if report.slices is None else [_slice_to_dict(item) for item in report.slices],
     }
 
 
@@ -95,6 +96,23 @@ def _summary_to_dict(summary: BacktestSummary) -> dict[str, JsonValue]:
         "return_rate": _decimal_to_str(summary.return_rate),
         "hit_rate": _decimal_to_str(summary.hit_rate),
         "coverage_rate": _decimal_to_str(summary.coverage_rate),
+    }
+
+
+def _slice_to_dict(item: BacktestSlice) -> dict[str, JsonValue]:
+    return {
+        "dimension": item.dimension,
+        "key": item.key,
+        "selected_bet_count": item.selected_bet_count,
+        "selected_race_count": item.selected_race_count,
+        "hit_count": item.hit_count,
+        "miss_count": item.miss_count,
+        "payout_missing_count": item.payout_missing_count,
+        "total_stake_yen": _decimal_to_str(item.total_stake_yen),
+        "total_returned_yen": _decimal_to_str(item.total_returned_yen),
+        "net_profit_yen": _decimal_to_str(item.net_profit_yen),
+        "return_rate": _decimal_to_str(item.return_rate),
+        "hit_rate": _decimal_to_str(item.hit_rate),
     }
 
 

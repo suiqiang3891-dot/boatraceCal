@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from boatrace_cal.backtest.settlement import BacktestSettlementRow
-from boatrace_cal.backtest.summary import summarize_backtest_settlements
+from boatrace_cal.backtest.summary import build_backtest_slices, summarize_backtest_settlements
 from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.settlement import SettlementResult, SettlementStatus
@@ -45,6 +45,34 @@ def test_summarize_backtest_settlements_handles_no_selected_bets() -> None:
     assert summary.return_rate == Decimal("0")
     assert summary.hit_rate == Decimal("0")
     assert summary.coverage_rate == Decimal("0")
+
+
+def test_build_backtest_slices_groups_selected_bets_for_ui_reports() -> None:
+    race_1 = RaceId(date(2025, 1, 2), VenueCode("01"), 1)
+    race_2 = RaceId(date(2025, 1, 2), VenueCode("02"), 1)
+    trifecta = BetCombination.create(BetType.TRIFECTA_ORDERED, (1, 2, 3))
+    exacta = BetCombination.create(BetType.EXACTA_ORDERED, (1, 2))
+
+    slices = build_backtest_slices(
+        rows=(
+            _row("hit-rec", race_1, trifecta, SettlementStatus.HIT, "100", "300"),
+            _row("miss-rec", race_2, exacta, SettlementStatus.MISS, "100", "0"),
+        )
+    )
+
+    assert [(item.dimension, item.key) for item in slices] == [
+        ("venue", "01"),
+        ("venue", "02"),
+        ("bet_type", "exacta_ordered"),
+        ("bet_type", "trifecta_ordered"),
+    ]
+    assert slices[0].selected_bet_count == 1
+    assert slices[0].hit_count == 1
+    assert slices[0].net_profit_yen == Decimal("200")
+    assert slices[0].return_rate == Decimal("3")
+    assert slices[1].miss_count == 1
+    assert slices[1].net_profit_yen == Decimal("-100")
+    assert slices[1].return_rate == Decimal("0")
 
 
 def _row(

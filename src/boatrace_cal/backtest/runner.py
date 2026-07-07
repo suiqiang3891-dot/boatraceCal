@@ -12,7 +12,12 @@ from boatrace_cal.backtest.settlement import (
     BacktestSettlementRow,
     settle_selected_recommendations,
 )
-from boatrace_cal.backtest.summary import BacktestSummary, summarize_backtest_settlements
+from boatrace_cal.backtest.summary import (
+    BacktestSlice,
+    BacktestSummary,
+    build_backtest_slices,
+    summarize_backtest_settlements,
+)
 from boatrace_cal.domain.bets import BetType
 from boatrace_cal.domain.races import RaceId
 from boatrace_cal.domain.recommendations import Recommendation
@@ -28,6 +33,7 @@ class BacktestReport:
     settlements: tuple[BacktestSettlementRow, ...] | None
     summary: BacktestSummary | None
     equity_curve: EquityCurve | None
+    slices: tuple[BacktestSlice, ...] | None
 
     def __post_init__(self) -> None:
         if type(self.readiness) is not BacktestReadiness:
@@ -41,11 +47,26 @@ class BacktestReport:
             raise TypeError("summary must be a BacktestSummary or None")
         if self.equity_curve is not None and type(self.equity_curve) is not EquityCurve:
             raise TypeError("equity_curve must be an EquityCurve or None")
+        if self.slices is not None and (
+            type(self.slices) is not tuple
+            or any(type(item) is not BacktestSlice for item in self.slices)
+        ):
+            raise TypeError("slices must be a tuple of BacktestSlice instances or None")
         if not self.readiness.ready:
-            if self.settlements is not None or self.summary is not None or self.equity_curve is not None:
+            if (
+                self.settlements is not None
+                or self.summary is not None
+                or self.equity_curve is not None
+                or self.slices is not None
+            ):
                 raise ValueError("blocked reports must not include executed backtest outputs")
-        elif self.settlements is None or self.summary is None or self.equity_curve is None:
-            raise ValueError("ready reports must include settlements, summary, and equity_curve")
+        elif (
+            self.settlements is None
+            or self.summary is None
+            or self.equity_curve is None
+            or self.slices is None
+        ):
+            raise ValueError("ready reports must include settlements, summary, equity_curve, and slices")
 
 
 def run_backtest(
@@ -76,6 +97,7 @@ def run_backtest(
             settlements=None,
             summary=None,
             equity_curve=None,
+            slices=None,
         )
 
     settlements = settle_selected_recommendations(
@@ -91,4 +113,5 @@ def run_backtest(
             expected_race_count=len(normalized_expected_races),
         ),
         equity_curve=build_equity_curve(rows=settlements),
+        slices=build_backtest_slices(rows=settlements),
     )

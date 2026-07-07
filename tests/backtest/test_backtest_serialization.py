@@ -35,6 +35,36 @@ def test_backtest_report_to_dict_serializes_ready_report_for_json_output() -> No
     assert payload["summary"]["selected_bet_count"] == 1
     assert payload["summary"]["net_profit_yen"] == "1100"
     assert payload["equity_curve"]["final_equity_yen"] == "1100"
+    assert payload["slices"] == [
+        {
+            "dimension": "venue",
+            "key": "01",
+            "selected_bet_count": 1,
+            "selected_race_count": 1,
+            "hit_count": 1,
+            "miss_count": 0,
+            "payout_missing_count": 0,
+            "total_stake_yen": "100",
+            "total_returned_yen": "1200",
+            "net_profit_yen": "1100",
+            "return_rate": "12",
+            "hit_rate": "1",
+        },
+        {
+            "dimension": "bet_type",
+            "key": "trifecta_ordered",
+            "selected_bet_count": 1,
+            "selected_race_count": 1,
+            "hit_count": 1,
+            "miss_count": 0,
+            "payout_missing_count": 0,
+            "total_stake_yen": "100",
+            "total_returned_yen": "1200",
+            "net_profit_yen": "1100",
+            "return_rate": "12",
+            "hit_rate": "1",
+        },
+    ]
     assert payload["settlements"] == [
         {
             "recommendation_id": "rec-1",
@@ -74,6 +104,7 @@ def test_backtest_report_to_dict_serializes_blocked_report_without_execution_out
     assert payload["readiness"]["refusal_reason"] == "historical_data_quality_issues"
     assert payload["summary"] is None
     assert payload["equity_curve"] is None
+    assert payload["slices"] is None
     assert payload["settlements"] is None
     assert payload["readiness"]["blockers"] == [
         {
