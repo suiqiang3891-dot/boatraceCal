@@ -44,7 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     quality.add_argument("--results", required=True, type=Path)
     quality.add_argument("--payouts", required=True, type=Path)
-    quality.add_argument("--expected-race", required=True, action="append")
+    _add_expected_race_arguments(quality)
     quality.add_argument("--bet-type", required=True, action="append")
     quality.add_argument("--output", required=True, type=Path)
 
@@ -55,10 +55,17 @@ def _build_parser() -> argparse.ArgumentParser:
     backtest.add_argument("--recommendations", required=True, type=Path)
     backtest.add_argument("--results", required=True, type=Path)
     backtest.add_argument("--payouts", required=True, type=Path)
-    backtest.add_argument("--expected-race", required=True, action="append")
+    _add_expected_race_arguments(backtest)
     backtest.add_argument("--bet-type", required=True, action="append")
     backtest.add_argument("--output", required=True, type=Path)
     return parser
+
+
+def _add_expected_race_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--expected-race", action="append", default=[])
+    parser.add_argument("--expected-date")
+    parser.add_argument("--venue")
+    parser.add_argument("--race-nos")
 
 
 def _run_backtest_report(args: argparse.Namespace) -> int:
@@ -66,7 +73,7 @@ def _run_backtest_report(args: argparse.Namespace) -> int:
         recommendations=load_recommendations_csv(args.recommendations),
         results=load_results_csv(args.results),
         payouts=load_payouts_csv(args.payouts),
-        expected_races=tuple(_parse_race_id(value) for value in args.expected_race),
+        expected_races=_collect_expected_races(args),
         bet_types=tuple(BetType(value) for value in args.bet_type),
     )
     export_backtest_report_json(report, args.output)
@@ -77,7 +84,7 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
     report = build_historical_data_quality_report(
         results=load_results_csv(args.results),
         payouts=load_payouts_csv(args.payouts),
-        expected_races=tuple(_parse_race_id(value) for value in args.expected_race),
+        expected_races=_collect_expected_races(args),
         bet_types=tuple(BetType(value) for value in args.bet_type),
     )
     output_path: Path = args.output
@@ -88,6 +95,22 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
         encoding="utf-8",
     )
     return 0
+
+
+def _collect_expected_races(args: argparse.Namespace) -> tuple[RaceId, ...]:
+    races = [_parse_race_id(value) for value in args.expected_race]
+    if args.expected_date is not None or args.venue is not None or args.race_nos is not None:
+        if args.expected_date is None or args.venue is None or args.race_nos is None:
+            raise ValueError("expected-date, venue, and race-nos must be provided together")
+        race_date = date.fromisoformat(args.expected_date)
+        venue = VenueCode(args.venue)
+        races.extend(
+            RaceId(race_date=race_date, venue=venue, race_no=race_no)
+            for race_no in _parse_race_numbers(args.race_nos)
+        )
+    if not races:
+        raise ValueError("expected races require --expected-race or expected date range arguments")
+    return tuple(sorted(set(races), key=_race_id_sort_key))
 
 
 def _parse_race_id(value: str) -> RaceId:
@@ -102,3 +125,25 @@ def _parse_race_id(value: str) -> RaceId:
         venue=VenueCode(venue),
         race_no=int(race_no),
     )
+
+
+def _parse_race_numbers(value: str) -> tuple[int, ...]:
+    race_numbers: list[int] = []
+    for part in value.split(","):
+        token = part.strip()
+        if not token:
+            raise ValueError("race-nos must not contain empty entries")
+        if "-" in token:
+            start_text, end_text = token.split("-", maxsplit=1)
+            start = int(start_text)
+            end = int(end_text)
+            if end < start:
+                raise ValueError("race-nos range end must not be before start")
+            race_numbers.extend(range(start, end + 1))
+        else:
+            race_numbers.append(int(token))
+    return tuple(race_numbers)
+
+
+def _race_id_sort_key(race_id: RaceId) -> tuple[date, str, int]:
+    return (race_id.race_date, race_id.venue.value, race_id.race_no)
