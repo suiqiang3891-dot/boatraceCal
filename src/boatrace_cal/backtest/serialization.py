@@ -9,6 +9,8 @@ from boatrace_cal.backtest.settlement import BacktestSettlementRow
 from boatrace_cal.backtest.summary import BacktestSlice, BacktestSummary
 from boatrace_cal.domain.bets import BetCombination
 from boatrace_cal.domain.races import RaceId
+from boatrace_cal.domain.recommendations import Recommendation
+from boatrace_cal.domain.versions import ArtifactVersions
 from boatrace_cal.settlement import SettlementResult
 from boatrace_cal.validation.data_quality import DataQualityIssue
 
@@ -62,7 +64,34 @@ def _settlement_row_to_dict(row: BacktestSettlementRow) -> dict[str, JsonValue]:
         "stake_yen": _decimal_to_str(row.stake_yen),
         "returned_yen": _decimal_to_str(row.returned_yen),
         "net_profit_yen": _decimal_to_str(row.net_profit_yen),
+        "recommendation": _recommendation_to_dict(row.recommendation),
         "settlement": _settlement_to_dict(row.settlement),
+    }
+
+
+def _recommendation_to_dict(recommendation: Recommendation) -> dict[str, JsonValue]:
+    return {
+        "stage": recommendation.stage.value,
+        "decision": recommendation.decision.value,
+        "confidence": recommendation.confidence.value,
+        "probability": _decimal_to_str(recommendation.probability),
+        "odds": None if recommendation.odds is None else _decimal_to_str(recommendation.odds),
+        "expected_value": None
+        if recommendation.expected_value is None
+        else _decimal_to_str(recommendation.expected_value),
+        "as_of": recommendation.as_of.isoformat(),
+        "stake_units": recommendation.stake_units,
+        "versions": _versions_to_dict(recommendation.versions),
+        "reason_codes": list(recommendation.reason_codes),
+    }
+
+
+def _versions_to_dict(versions: ArtifactVersions) -> dict[str, JsonValue]:
+    return {
+        "data": versions.data,
+        "feature": versions.feature,
+        "model": versions.model,
+        "strategy": versions.strategy,
     }
 
 

@@ -38,6 +38,10 @@ def test_settle_selected_recommendations_returns_auditable_paper_bet_rows() -> N
     )
 
     assert tuple(row.recommendation_id for row in rows) == ("hit-rec", "miss-rec")
+    assert rows[0].recommendation.probability == Decimal("0.25")
+    assert rows[0].recommendation.odds == Decimal("5.2")
+    assert rows[0].recommendation.expected_value == Decimal("0.30")
+    assert rows[0].recommendation.reason_codes == ("positive_ev",)
     assert rows[0].settlement.status is SettlementStatus.HIT
     assert rows[0].stake_yen == Decimal("100")
     assert rows[0].returned_yen == Decimal("1200")

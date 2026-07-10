@@ -21,6 +21,7 @@ class BacktestSettlementRow:
     stake_yen: Decimal
     returned_yen: Decimal
     net_profit_yen: Decimal
+    recommendation: Recommendation
     settlement: SettlementResult
 
     def __post_init__(self) -> None:
@@ -41,10 +42,24 @@ class BacktestSettlementRow:
             raise ValueError("returned_yen must not be negative")
         if self.net_profit_yen != self.returned_yen - self.stake_yen:
             raise ValueError("net_profit_yen must equal returned_yen minus stake_yen")
+        if type(self.recommendation) is not Recommendation:
+            raise TypeError("recommendation must be a Recommendation")
+        if self.recommendation.recommendation_id != self.recommendation_id:
+            raise ValueError("recommendation id must match row recommendation_id")
+        if self.recommendation.race_id != self.race_id:
+            raise ValueError("recommendation race_id must match row race_id")
+        if self.recommendation.stage is not PlanStage.FINAL:
+            raise ValueError("settlement rows require a final recommendation")
+        if self.recommendation.decision is not Decision.SELECT:
+            raise ValueError("settlement rows require a selected recommendation")
+        if self.recommendation.stake_units != self.stake_units:
+            raise ValueError("recommendation stake units must match row stake_units")
         if type(self.settlement) is not SettlementResult:
             raise TypeError("settlement must be a SettlementResult")
         if self.settlement.race_id != self.race_id:
             raise ValueError("settlement race_id must match row race_id")
+        if self.settlement.combination != self.recommendation.combination:
+            raise ValueError("settlement combination must match recommendation combination")
 
 
 def settle_selected_recommendations(
@@ -77,6 +92,7 @@ def settle_selected_recommendations(
                 stake_yen=stake_yen,
                 returned_yen=returned_yen,
                 net_profit_yen=returned_yen - stake_yen,
+                recommendation=recommendation,
                 settlement=settlement,
             )
         )

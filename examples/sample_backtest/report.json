@@ -39,6 +39,26 @@
     {
       "net_profit_yen": "1000",
       "race_id": "20250102-01-01",
+      "recommendation": {
+        "as_of": "2025-01-02T10:00:00+00:00",
+        "confidence": "high",
+        "decision": "select",
+        "expected_value": "0.30",
+        "odds": "5.2",
+        "probability": "0.25",
+        "reason_codes": [
+          "positive_ev",
+          "sample"
+        ],
+        "stage": "final",
+        "stake_units": 1,
+        "versions": {
+          "data": "sample-data-v1",
+          "feature": "sample-feature-v1",
+          "model": "sample-model-v1",
+          "strategy": "sample-strategy-v1"
+        }
+      },
       "recommendation_id": "sample-rec-hit",
       "returned_yen": "1100",
       "settlement": {
@@ -60,6 +80,26 @@
     {
       "net_profit_yen": "-100",
       "race_id": "20250102-01-02",
+      "recommendation": {
+        "as_of": "2025-01-02T10:15:00+00:00",
+        "confidence": "medium",
+        "decision": "select",
+        "expected_value": "0.12",
+        "odds": "4.1",
+        "probability": "0.18",
+        "reason_codes": [
+          "positive_ev",
+          "sample"
+        ],
+        "stage": "final",
+        "stake_units": 1,
+        "versions": {
+          "data": "sample-data-v1",
+          "feature": "sample-feature-v1",
+          "model": "sample-model-v1",
+          "strategy": "sample-strategy-v1"
+        }
+      },
       "recommendation_id": "sample-rec-miss",
       "returned_yen": "0",
       "settlement": {

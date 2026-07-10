@@ -1,10 +1,17 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 from boatrace_cal.backtest.equity import build_equity_curve
 from boatrace_cal.backtest.settlement import BacktestSettlementRow
 from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.domain.races import RaceId, VenueCode
+from boatrace_cal.domain.recommendations import (
+    ConfidenceLevel,
+    Decision,
+    PlanStage,
+    Recommendation,
+)
+from boatrace_cal.domain.versions import ArtifactVersions
 from boatrace_cal.settlement import SettlementResult, SettlementStatus
 
 
@@ -69,10 +76,33 @@ def _row(
         stake_yen=stake,
         returned_yen=returned,
         net_profit_yen=returned - stake,
+        recommendation=_recommendation(recommendation_id, race_id, combination),
         settlement=SettlementResult(
             race_id=race_id,
             combination=combination,
             status=status,
             payout_yen=returned if status is SettlementStatus.HIT else Decimal("0"),
         ),
+    )
+
+
+def _recommendation(
+    recommendation_id: str,
+    race_id: RaceId,
+    combination: BetCombination,
+) -> Recommendation:
+    return Recommendation(
+        recommendation_id=recommendation_id,
+        race_id=race_id,
+        combination=combination,
+        stage=PlanStage.FINAL,
+        decision=Decision.SELECT,
+        confidence=ConfidenceLevel.HIGH,
+        probability=Decimal("0.25"),
+        odds=Decimal("5.2"),
+        expected_value=Decimal("0.30"),
+        as_of=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
+        stake_units=1,
+        versions=ArtifactVersions("data-v1", "feature-v1", "model-v1", "strategy-v1"),
+        reason_codes=("positive_ev",),
     )

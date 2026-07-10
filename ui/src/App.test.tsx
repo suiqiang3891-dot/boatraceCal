@@ -1,13 +1,66 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
+import type { BacktestReport } from "./reportMetrics";
 
-test("App renders the first backtest dashboard from the bundled sample report", () => {
+test("App renders the first smart table workbench from the bundled sample report", () => {
   render(<App />);
 
-  expect(screen.getByRole("heading", { name: "BOAT RACE 回测工作台" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "BOAT RACE 智能表格工作台" })).toBeInTheDocument();
+  expect(screen.getByText("业务日期")).toBeInTheDocument();
+  expect(screen.getByText("2025-01-02")).toBeInTheDocument();
+  expect(screen.getByText("候选 2")).toBeInTheDocument();
   expect(screen.getAllByText("+¥900").length).toBeGreaterThan(0);
-  expect(screen.getByText("资金曲线")).toBeInTheDocument();
-  expect(screen.getByText("场地")).toBeInTheDocument();
-  expect(screen.getByText("trifecta_ordered")).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "场地" })).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "模型概率" })).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "保守EV" })).toBeInTheDocument();
+  expect(screen.getAllByText("三连单 1-2-3").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("25.0%").length).toBeGreaterThan(0);
+  expect(screen.getByText("5.20")).toBeInTheDocument();
+  expect(screen.getAllByText("待审核").length).toBeGreaterThan(1);
+  expect(screen.getByRole("heading", { name: "行级详情" })).toBeInTheDocument();
+  expect(screen.getByText("sample-data-v1")).toBeInTheDocument();
+  expect(screen.getByText(/六艇概率构成等待模型明细/)).toBeInTheDocument();
   expect(screen.getByText(/历史表现不代表未来结果/)).toBeInTheDocument();
+});
+
+test("App updates the detail panel when a smart table row is selected", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: /20250102-01-02/ }));
+
+  expect(screen.getByRole("heading", { name: "20250102-01-02" })).toBeInTheDocument();
+  expect(screen.getAllByText("中").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("18.0%").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("未中").length).toBeGreaterThan(0);
+});
+
+test("App renders blocked reports without crashing", () => {
+  const blockedReport: BacktestReport = {
+    readiness: {
+      status: "blocked",
+      ready: false,
+    },
+    summary: null,
+    equity_curve: null,
+    slices: null,
+    settlements: null,
+  };
+
+  render(<App report={blockedReport} />);
+
+  expect(screen.getByText("BLOCKED")).toBeInTheDocument();
+  expect(screen.getByText("没有可显示候选")).toBeInTheDocument();
+  expect(screen.getByText(/等待数据质量检查/)).toBeInTheDocument();
+});
+
+test("App filters the smart table rows by decision state", () => {
+  render(<App />);
+
+  fireEvent.click(
+    screen.getAllByRole("button", { name: "PASS" }).find((button) =>
+      button.getAttribute("aria-pressed") === "false",
+    ) as HTMLElement,
+  );
+
+  expect(screen.getByText("没有可显示候选")).toBeInTheDocument();
 });

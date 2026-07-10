@@ -73,6 +73,23 @@ def test_backtest_report_to_dict_serializes_ready_report_for_json_output() -> No
             "stake_yen": "100",
             "returned_yen": "1200",
             "net_profit_yen": "1100",
+            "recommendation": {
+                "stage": "final",
+                "decision": "select",
+                "confidence": "high",
+                "probability": "0.25",
+                "odds": "5.2",
+                "expected_value": "0.30",
+                "as_of": "2025-01-02T10:00:00+00:00",
+                "stake_units": 1,
+                "versions": {
+                    "data": "data-v1",
+                    "feature": "feature-v1",
+                    "model": "model-v1",
+                    "strategy": "strategy-v1",
+                },
+                "reason_codes": ["positive_ev"],
+            },
             "settlement": {
                 "race_id": "20250102-01-01",
                 "combination": {

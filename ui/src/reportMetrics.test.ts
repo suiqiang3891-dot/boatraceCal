@@ -1,11 +1,22 @@
 import sampleReport from "../../examples/sample_backtest/report.json";
 import { buildDashboardModel, type BacktestReport } from "./reportMetrics";
 
-test("buildDashboardModel formats report metrics for the first UI dashboard", () => {
-  const model = buildDashboardModel(sampleReport as BacktestReport);
+const typedSampleReport = sampleReport as BacktestReport;
+const sampleSettlements = typedSampleReport.settlements ?? [];
+
+test("buildDashboardModel formats report metrics for the smart table workbench", () => {
+  const model = buildDashboardModel(typedSampleReport);
 
   expect(model.statusLabel).toBe("READY");
   expect(model.riskNotice).toContain("历史表现不代表未来结果");
+  expect(model.statusBar).toEqual({
+    businessDate: "2025-01-02",
+    freshness: "2025-01-02 10:15 UTC",
+    venueCount: 1,
+    raceCount: 2,
+    candidateCount: 2,
+    simulationBudget: "¥200",
+  });
   expect(model.summaryCards).toEqual([
     { label: "净收益", value: "+¥900", tone: "positive" },
     { label: "回收率", value: "550.0%", tone: "positive" },
@@ -36,4 +47,83 @@ test("buildDashboardModel formats report metrics for the first UI dashboard", ()
     { raceId: "20250102-01-01", equityYen: 1000, drawdownYen: 0 },
     { raceId: "20250102-01-02", equityYen: 900, drawdownYen: 100 },
   ]);
+  expect(model.smartTableRows[0]).toMatchObject({
+    id: "sample-rec-hit",
+    venue: "01",
+    raceNo: "1R",
+    startTime: "等待赛前数据",
+    combination: "三连单 1-2-3",
+    modelProbability: "25.0%",
+    marketOdds: "5.20",
+    impliedProbability: "19.2%",
+    expectedValue: "+30.0%",
+    conservativeExpectedValue: "+24.0%",
+    confidenceLabel: "高",
+    stakeUnits: "1",
+    decisionLabel: "候选",
+    reviewStatus: "待审核",
+    notes: "positive_ev / sample",
+    freshness: "2025-01-02 10:00 UTC",
+    settlementLabel: "命中",
+  });
+});
+
+test("buildDashboardModel uses waiting placeholders for unavailable market fields", () => {
+  const report: BacktestReport = {
+    ...typedSampleReport,
+    settlements: [
+      {
+        ...sampleSettlements[0],
+        recommendation: {
+          ...sampleSettlements[0].recommendation,
+          odds: null,
+          expected_value: null,
+        },
+      },
+    ],
+  };
+
+  const model = buildDashboardModel(report);
+
+  expect(model.smartTableRows[0].marketOdds).toBe("等待赛前数据");
+  expect(model.smartTableRows[0].impliedProbability).toBe("等待赛前数据");
+  expect(model.smartTableRows[0].expectedValue).toBe("等待赛前数据");
+  expect(model.smartTableRows[0].conservativeExpectedValue).toBe("等待赛前数据");
+});
+
+test("buildDashboardModel returns a safe empty model for blocked reports", () => {
+  const model = buildDashboardModel({
+    readiness: {
+      status: "blocked",
+      ready: false,
+    },
+    summary: null,
+    equity_curve: null,
+    slices: null,
+    settlements: null,
+  });
+
+  expect(model.isReady).toBe(false);
+  expect(model.statusLabel).toBe("BLOCKED");
+  expect(model.statusBar.businessDate).toBe("等待赛前数据");
+  expect(model.summaryCards[0]).toEqual({ label: "净收益", value: "¥0", tone: "neutral" });
+  expect(model.smartTableRows).toEqual([]);
+  expect(model.equityPoints).toEqual([]);
+});
+
+test("buildDashboardModel shows a date range for multi-day reports", () => {
+  const report: BacktestReport = {
+    ...typedSampleReport,
+    settlements: [
+      sampleSettlements[0],
+      {
+        ...sampleSettlements[1],
+        race_id: "20250103-01-02",
+      },
+    ],
+  };
+
+  const model = buildDashboardModel(report);
+
+  expect(model.statusBar.businessDate).toBe("2025-01-02 至 2025-01-03");
 });
