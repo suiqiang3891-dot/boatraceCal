@@ -12,6 +12,16 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
+# Frontend tool caches and build outputs
+node_modules/
+ui/node_modules/
+ui/dist/
+ui/coverage/
+ui/*.log
+ui/*.tsbuildinfo
+ui/vite.config.d.ts
+ui/vite.config.js
+
 # Generated project data and runtime state
 data/
 artifacts/
