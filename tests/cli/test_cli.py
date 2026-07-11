@@ -399,26 +399,28 @@ def test_review_store_import_command_upserts_browser_review_export(tmp_path: Pat
     )
     import_path.write_text(
         json.dumps(
-            [
-                {
-                    "recommendation_id": "rec-2",
-                    "race_id": "20250102-01-02",
-                    "decision": "pass",
-                    "stake_units": 0,
-                    "notes": "odds moved",
-                    "reviewed_at": "2026-07-11T03:30:00+00:00",
-                    "reviewed_by": "browser-analyst",
-                },
-                {
-                    "recommendation_id": "rec-1",
-                    "race_id": "20250102-01-01",
-                    "decision": "confirmed",
-                    "stake_units": 3,
-                    "notes": "replace old",
-                    "reviewed_at": "2026-07-11T03:20:00+00:00",
-                    "reviewed_by": "browser-analyst",
-                },
-            ],
+            {
+                "reviews": [
+                    {
+                        "recommendation_id": "rec-2",
+                        "race_id": "20250102-01-02",
+                        "decision": "pass",
+                        "stake_units": 0,
+                        "notes": "odds moved",
+                        "reviewed_at": "2026-07-11T03:30:00+00:00",
+                        "reviewed_by": "browser-analyst",
+                    },
+                    {
+                        "recommendation_id": "rec-1",
+                        "race_id": "20250102-01-01",
+                        "decision": "confirmed",
+                        "stake_units": 3,
+                        "notes": "replace old",
+                        "reviewed_at": "2026-07-11T03:20:00+00:00",
+                        "reviewed_by": "browser-analyst",
+                    },
+                ],
+            },
             ensure_ascii=False,
         )
         + "\n",

@@ -946,7 +946,7 @@ function exportReviewJson(rows: ReviewableRow[], businessDate: string): void {
     reviewed_at: reviewedAt,
     reviewed_by: REVIEW_EXPORT_USER,
   }));
-  const payload = `${JSON.stringify(records, null, 2)}\n`;
+  const payload = `${JSON.stringify({ reviews: records }, null, 2)}\n`;
   triggerJsonDownload(payload, `boatrace-reviews-${safeFilePart(businessDate)}.json`);
 }
 

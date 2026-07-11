@@ -135,6 +135,37 @@ def test_review_json_round_trips_auditable_records(tmp_path: Path) -> None:
     assert reviews_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_review_json_loader_accepts_openapi_import_request_envelope(tmp_path: Path) -> None:
+    reviews_path = tmp_path / "browser" / "reviews.json"
+    reviews_path.parent.mkdir(parents=True)
+    reviews_path.write_text(
+        json.dumps(
+            {
+                "reviews": [
+                    {
+                        "recommendation_id": "rec-envelope",
+                        "race_id": "20250102-01-01",
+                        "decision": "confirmed",
+                        "stake_units": 2,
+                        "notes": "from browser",
+                        "reviewed_at": "2026-07-11T03:00:00+00:00",
+                        "reviewed_by": "browser-analyst",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    loaded_reviews = load_reviews_json(reviews_path)
+
+    assert len(loaded_reviews) == 1
+    assert loaded_reviews[0].recommendation_id == "rec-envelope"
+    assert loaded_reviews[0].decision is ReviewDecision.CONFIRMED
+
+
 def test_confirmed_review_list_to_dict_serializes_totals() -> None:
     generated_at = datetime(2026, 7, 11, 4, 0, tzinfo=UTC)
     review_list = build_confirmed_review_list(

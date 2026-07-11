@@ -138,9 +138,8 @@ def load_reviews_json(path: Path | str) -> tuple[RecommendationReview, ...]:
     """Load review records from a JSON file using the public review contract."""
 
     raw_payload: Any = json.loads(Path(path).read_text(encoding="utf-8"))
-    if type(raw_payload) is not list:
-        raise ValueError("review JSON must be a list")
-    return tuple(review_from_dict(item) for item in raw_payload)
+    review_records = _review_records_from_json_payload(raw_payload)
+    return tuple(review_from_dict(item) for item in review_records)
 
 
 def review_from_dict(payload: object) -> RecommendationReview:
@@ -161,6 +160,19 @@ def review_from_dict(payload: object) -> RecommendationReview:
         reviewed_at=_parse_aware_datetime(_required_string(mapping, "reviewed_at"), "reviewed_at"),
         reviewed_by=_required_string(mapping, "reviewed_by"),
     )
+
+
+def _review_records_from_json_payload(payload: object) -> list[object]:
+    if type(payload) is list:
+        return payload
+    if type(payload) is dict:
+        object_mapping = cast(dict[object, object], payload)
+        if any(type(key) is not str for key in object_mapping):
+            raise ValueError("review JSON keys must be strings")
+        reviews_payload = cast(dict[str, object], object_mapping).get("reviews")
+        if type(reviews_payload) is list:
+            return reviews_payload
+    raise ValueError("review JSON must be a list or an object with a reviews list")
 
 
 def build_confirmed_review_list(

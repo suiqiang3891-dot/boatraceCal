@@ -492,25 +492,27 @@ test("App exports backend compatible review JSON for server handoff", () => {
     },
   ]);
   const exportedText = exportedParts[0].join("");
-  expect(JSON.parse(exportedText)).toEqual([
-    {
-      decision: "confirmed",
-      notes: "server handoff",
-      race_id: "20250102-01-01",
-      recommendation_id: "sample-rec-hit",
-      reviewed_at: "2026-07-11T04:30:00.000Z",
-      reviewed_by: "browser-analyst",
-      stake_units: 1,
-    },
-    {
-      decision: "pass",
-      notes: "positive_ev / sample",
-      race_id: "20250102-01-02",
-      recommendation_id: "sample-rec-miss",
-      reviewed_at: "2026-07-11T04:30:00.000Z",
-      reviewed_by: "browser-analyst",
-      stake_units: 0,
-    },
-  ]);
+  expect(JSON.parse(exportedText)).toEqual({
+    reviews: [
+      {
+        decision: "confirmed",
+        notes: "server handoff",
+        race_id: "20250102-01-01",
+        recommendation_id: "sample-rec-hit",
+        reviewed_at: "2026-07-11T04:30:00.000Z",
+        reviewed_by: "browser-analyst",
+        stake_units: 1,
+      },
+      {
+        decision: "pass",
+        notes: "positive_ev / sample",
+        race_id: "20250102-01-02",
+        recommendation_id: "sample-rec-miss",
+        reviewed_at: "2026-07-11T04:30:00.000Z",
+        reviewed_by: "browser-analyst",
+        stake_units: 0,
+      },
+    ],
+  });
   expect(exportedText).toMatch(/\n$/);
 });
