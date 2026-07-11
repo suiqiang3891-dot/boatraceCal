@@ -17,6 +17,7 @@ test("App renders the first smart table workbench from the bundled sample report
   expect(screen.getAllByText("25.0%").length).toBeGreaterThan(0);
   expect(screen.getByText("5.20")).toBeInTheDocument();
   expect(screen.getAllByText("待审核").length).toBeGreaterThan(1);
+  expect(screen.getByText("审核 已确认 0 / PASS 0 / 待审 2")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "行级详情" })).toBeInTheDocument();
   expect(screen.getByText("sample-data-v1")).toBeInTheDocument();
   expect(screen.getByText(/六艇概率构成等待模型明细/)).toBeInTheDocument();
@@ -63,4 +64,29 @@ test("App filters the smart table rows by decision state", () => {
   );
 
   expect(screen.getByText("没有可显示候选")).toBeInTheDocument();
+});
+
+test("App applies local review actions without changing the report contract", () => {
+  render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "增加模拟单位" }));
+  expect(screen.getByLabelText("当前模拟单位")).toHaveTextContent("2 单位");
+
+  fireEvent.change(screen.getByLabelText("审核备注"), {
+    target: { value: "盘口确认后保留" },
+  });
+  expect(screen.getByDisplayValue("盘口确认后保留")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "确认候选" }));
+  expect(screen.getAllByText("已确认").length).toBeGreaterThan(1);
+  expect(screen.getByText("审核 已确认 1 / PASS 0 / 待审 1")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "人工 PASS" }));
+  expect(screen.getAllByText("已PASS").length).toBeGreaterThan(1);
+  expect(screen.getByText("审核 已确认 0 / PASS 1 / 待审 1")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "重置审核" }));
+  expect(screen.getByLabelText("当前模拟单位")).toHaveTextContent("1 单位");
+  expect(screen.getByDisplayValue("positive_ev / sample")).toBeInTheDocument();
+  expect(screen.getByText("审核 已确认 0 / PASS 0 / 待审 2")).toBeInTheDocument();
 });

@@ -1,7 +1,12 @@
 import {
   AlertTriangle,
+  Ban,
+  CheckCircle2,
   Download,
   FileCheck2,
+  Minus,
+  Plus,
+  RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
@@ -16,31 +21,97 @@ import {
 } from "./reportMetrics";
 import "./styles.css";
 
-type FilterKey = "all" | "select" | "wait" | "pass" | "reject";
+type FilterKey = "all" | "select" | "wait" | "pass" | "confirmed";
 
 const filters: Array<{ key: FilterKey; label: string }> = [
   { key: "all", label: "全部" },
   { key: "select", label: "候选" },
   { key: "wait", label: "WAIT" },
   { key: "pass", label: "PASS" },
-  { key: "reject", label: "拒绝" },
+  { key: "confirmed", label: "已确认" },
 ];
+
+type ReviewDecision = "pending" | "confirmed" | "pass";
+
+type ReviewState = {
+  decision: ReviewDecision;
+  stakeUnits: number;
+  notes: string;
+};
+
+type ReviewStateMap = Record<string, ReviewState>;
+
+type ReviewableRow = SmartTableRow & {
+  reviewDecision: ReviewDecision;
+  displayStakeUnits: string;
+  displayReviewStatus: string;
+  reviewStatusTone: Tone;
+  displayNotes: string;
+  displayDecisionLabel: string;
+  decisionTone: Tone;
+};
 
 function App({ report = sampleReport as BacktestReport }: { report?: BacktestReport }) {
   const model = useMemo(() => buildDashboardModel(report), [report]);
+  const [reviewState, setReviewState] = useState<ReviewStateMap>({});
   const [filter, setFilter] = useState<FilterKey>("all");
+  const reviewRows = useMemo(
+    () => model.smartTableRows.map((row) => applyReviewState(row, reviewState[row.id])),
+    [model.smartTableRows, reviewState],
+  );
   const filteredRows = useMemo(
-    () => model.smartTableRows.filter((row) => rowMatchesFilter(row, filter)),
-    [filter, model.smartTableRows],
+    () => reviewRows.filter((row) => rowMatchesFilter(row, filter)),
+    [filter, reviewRows],
   );
   const [selectedRowId, setSelectedRowId] = useState(model.smartTableRows[0]?.id ?? "");
   const selectedRow = useMemo(
     () =>
       filteredRows.find((row) => row.id === selectedRowId) ??
       filteredRows[0] ??
-      model.smartTableRows[0],
-    [filteredRows, model.smartTableRows, selectedRowId],
+      reviewRows[0],
+    [filteredRows, reviewRows, selectedRowId],
   );
+  const reviewCounts = useMemo(() => countReviewRows(reviewRows), [reviewRows]);
+
+  const updateReview = (
+    row: SmartTableRow,
+    updater: (state: ReviewState) => ReviewState,
+  ) => {
+    setReviewState((current) => {
+      const existing = current[row.id] ?? defaultReviewState(row);
+      return {
+        ...current,
+        [row.id]: updater(existing),
+      };
+    });
+  };
+
+  const handleConfirm = (row: ReviewableRow) => {
+    updateReview(row, (state) => ({ ...state, decision: "confirmed" }));
+  };
+
+  const handlePass = (row: ReviewableRow) => {
+    updateReview(row, (state) => ({ ...state, decision: "pass" }));
+  };
+
+  const handleStakeChange = (row: ReviewableRow, delta: number) => {
+    updateReview(row, (state) => ({
+      ...state,
+      stakeUnits: Math.max(0, state.stakeUnits + delta),
+    }));
+  };
+
+  const handleNotesChange = (row: ReviewableRow, notes: string) => {
+    updateReview(row, (state) => ({ ...state, notes }));
+  };
+
+  const handleReset = (row: ReviewableRow) => {
+    setReviewState((current) => {
+      const next = { ...current };
+      delete next[row.id];
+      return next;
+    });
+  };
 
   return (
     <main className="app-shell">
@@ -103,6 +174,10 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
         <div className="filter-meta">
           <SlidersHorizontal size={16} aria-hidden="true" />
           <span>模型 {selectedRow?.modelVersion ?? "等待赛前数据"}</span>
+          <span>
+            审核 已确认 {reviewCounts.confirmed} / PASS {reviewCounts.pass} / 待审{" "}
+            {reviewCounts.pending}
+          </span>
         </div>
       </section>
 
@@ -123,7 +198,18 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
         </section>
 
         <aside className="detail-panel" aria-labelledby="detail-title">
-          {selectedRow ? <DetailPanel row={selectedRow} /> : <EmptyDetailPanel />}
+          {selectedRow ? (
+            <DetailPanel
+              row={selectedRow}
+              onConfirm={handleConfirm}
+              onPass={handlePass}
+              onReset={handleReset}
+              onNotesChange={handleNotesChange}
+              onStakeChange={handleStakeChange}
+            />
+          ) : (
+            <EmptyDetailPanel />
+          )}
         </aside>
       </section>
 
@@ -176,20 +262,20 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
   );
 }
 
-function rowMatchesFilter(row: SmartTableRow, filter: FilterKey): boolean {
+function rowMatchesFilter(row: ReviewableRow, filter: FilterKey): boolean {
   if (filter === "all") {
     return true;
   }
   if (filter === "select") {
-    return row.decisionLabel === "候选";
+    return row.displayDecisionLabel === "候选";
   }
   if (filter === "wait") {
     return row.startTime === "等待赛前数据" || row.marketOdds === "等待赛前数据";
   }
   if (filter === "pass") {
-    return row.decisionLabel === "PASS";
+    return row.displayDecisionLabel === "PASS";
   }
-  return row.decisionLabel === "拒绝";
+  return row.reviewDecision === "confirmed";
 }
 
 function StatusItem({ label, value }: { label: string; value: string }) {
@@ -206,7 +292,7 @@ function SmartTable({
   selectedRowId,
   onSelect,
 }: {
-  rows: SmartTableRow[];
+  rows: ReviewableRow[];
   selectedRowId: string;
   onSelect: (id: string) => void;
 }) {
@@ -269,14 +355,18 @@ function SmartTable({
                   {row.confidenceLabel}
                 </span>
               </td>
-              <td className="number-cell">{row.stakeUnits}</td>
+              <td className="number-cell">{row.displayStakeUnits}</td>
               <td>
-                <span className="status-tag tag-positive">{row.decisionLabel}</span>
+                <span className={`status-tag tag-${row.decisionTone}`}>
+                  {row.displayDecisionLabel}
+                </span>
               </td>
               <td>
-                <span className="status-tag tag-warning">{row.reviewStatus}</span>
+                <span className={`status-tag tag-${row.reviewStatusTone}`}>
+                  {row.displayReviewStatus}
+                </span>
               </td>
-              <td className="notes-cell">{row.notes}</td>
+              <td className="notes-cell">{row.displayNotes}</td>
             </tr>
           ))}
         </tbody>
@@ -295,7 +385,23 @@ function EmptyDetailPanel() {
   );
 }
 
-function DetailPanel({ row }: { row: SmartTableRow }) {
+function DetailPanel({
+  row,
+  onConfirm,
+  onPass,
+  onReset,
+  onNotesChange,
+  onStakeChange,
+}: {
+  row: ReviewableRow;
+  onConfirm: (row: ReviewableRow) => void;
+  onPass: (row: ReviewableRow) => void;
+  onReset: (row: ReviewableRow) => void;
+  onNotesChange: (row: ReviewableRow, notes: string) => void;
+  onStakeChange: (row: ReviewableRow, delta: number) => void;
+}) {
+  const displayedStakeUnits = Number(row.displayStakeUnits);
+
   return (
     <>
       <div className="detail-heading">
@@ -312,6 +418,8 @@ function DetailPanel({ row }: { row: SmartTableRow }) {
         <DetailItem label="模型 / 市场" value={row.marketComparison} />
         <DetailItem label="置信度" value={row.confidenceLabel} />
         <DetailItem label="数据新鲜度" value={row.freshness} />
+        <DetailItem label="审核状态" value={row.displayReviewStatus} />
+        <DetailItem label="模拟单位" value={`${row.displayStakeUnits} 单位`} />
         <DetailItem label="备选与拒绝原因" value={row.alternatives} />
       </dl>
       <section className="support-section" aria-label="主要支持因素">
@@ -333,17 +441,66 @@ function DetailPanel({ row }: { row: SmartTableRow }) {
           <DetailItem label="策略" value={row.strategyVersion} />
         </dl>
       </section>
-      <div className="detail-actions" aria-label="审核操作">
-        <button type="button" disabled>
-          模拟单位 {row.stakeUnits}
-        </button>
-        <button type="button" disabled>
-          PASS
-        </button>
-        <button type="button" disabled>
-          备注
-        </button>
-      </div>
+      <section className="support-section" aria-label="人工审核">
+        <h4>人工审核</h4>
+        <label className="notes-editor">
+          <span>备注</span>
+          <textarea
+            aria-label="审核备注"
+            value={row.displayNotes}
+            onChange={(event) => onNotesChange(row, event.target.value)}
+          />
+        </label>
+        <div className="detail-actions" aria-label="审核操作">
+          <div className="unit-stepper" aria-label="模拟单位">
+            <button
+              className="square-action"
+              type="button"
+              aria-label="减少模拟单位"
+              disabled={displayedStakeUnits <= 0}
+              onClick={() => onStakeChange(row, -1)}
+            >
+              <Minus size={15} aria-hidden="true" />
+            </button>
+            <output aria-label="当前模拟单位">{row.displayStakeUnits} 单位</output>
+            <button
+              className="square-action"
+              type="button"
+              aria-label="增加模拟单位"
+              onClick={() => onStakeChange(row, 1)}
+            >
+              <Plus size={15} aria-hidden="true" />
+            </button>
+          </div>
+          <button
+            className="primary-action"
+            type="button"
+            aria-label="确认候选"
+            onClick={() => onConfirm(row)}
+          >
+            <CheckCircle2 size={15} aria-hidden="true" />
+            确认
+          </button>
+          <button
+            className="warning-action"
+            type="button"
+            aria-label="人工 PASS"
+            onClick={() => onPass(row)}
+          >
+            <Ban size={15} aria-hidden="true" />
+            PASS
+          </button>
+          <button
+            className="square-action"
+            type="button"
+            aria-label="重置审核"
+            onClick={() => onReset(row)}
+          >
+            <RotateCcw size={15} aria-hidden="true" />
+          </button>
+        </div>
+        <p className="inline-hint">审核修改仅保存在当前页面，接入 API 后再持久化。</p>
+      </section>
     </>
   );
 }
@@ -359,6 +516,41 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 
 function toneClass(tone: Tone): string {
   return `text-${tone}`;
+}
+
+function applyReviewState(row: SmartTableRow, review?: ReviewState): ReviewableRow {
+  const state = review ?? defaultReviewState(row);
+  const isPass = state.decision === "pass";
+  const isConfirmed = state.decision === "confirmed";
+
+  return {
+    ...row,
+    reviewDecision: state.decision,
+    displayStakeUnits: state.stakeUnits.toString(),
+    displayReviewStatus: isPass ? "已PASS" : isConfirmed ? "已确认" : row.reviewStatus,
+    reviewStatusTone: isPass ? "neutral" : isConfirmed ? "positive" : "warning",
+    displayNotes: state.notes,
+    displayDecisionLabel: isPass ? "PASS" : row.decisionLabel,
+    decisionTone: isPass ? "neutral" : row.decisionLabel === "候选" ? "positive" : "neutral",
+  };
+}
+
+function defaultReviewState(row: SmartTableRow): ReviewState {
+  return {
+    decision: "pending",
+    stakeUnits: Number(row.stakeUnits) || 0,
+    notes: row.notes,
+  };
+}
+
+function countReviewRows(rows: ReviewableRow[]): Record<ReviewDecision, number> {
+  return rows.reduce(
+    (counts, row) => {
+      counts[row.reviewDecision] += 1;
+      return counts;
+    },
+    { pending: 0, confirmed: 0, pass: 0 },
+  );
 }
 
 export default App;
