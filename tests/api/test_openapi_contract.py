@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from boatrace_cal.api_contract import build_openapi_spec, export_openapi_spec_json
+from boatrace_cal.errors import ErrorCode
 
 
 def test_openapi_contract_exposes_review_workflow_without_prediction_mutation() -> None:
@@ -61,3 +62,35 @@ def test_export_openapi_spec_json_writes_deterministic_file(tmp_path: Path) -> N
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload == build_openapi_spec()
     assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_openapi_contract_declares_stable_error_responses() -> None:
+    spec = build_openapi_spec()
+
+    assert spec["components"]["schemas"]["ApiError"] == {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+            "code": {
+                "type": "string",
+                "enum": [code.value for code in ErrorCode],
+            },
+            "message": {"type": "string"},
+            "details": {
+                "type": "object",
+                "additionalProperties": True,
+            },
+        },
+        "additionalProperties": False,
+    }
+
+    for path_item in spec["paths"].values():
+        for operation in path_item.values():
+            assert operation["responses"]["default"] == {
+                "description": "Error",
+                "content": {
+                    "application/json": {
+                        "schema": {"$ref": "#/components/schemas/ApiError"},
+                    },
+                },
+            }

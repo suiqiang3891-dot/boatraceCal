@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from boatrace_cal.errors import ErrorCode
+
 
 def build_openapi_spec() -> dict[str, Any]:
     """Return the stable OpenAPI contract for the local analysis API."""
@@ -33,6 +35,10 @@ def _json_response(schema_ref: str, description: str = "OK") -> dict[str, Any]:
             },
         },
     }
+
+
+def _error_response() -> dict[str, Any]:
+    return _json_response("#/components/schemas/ApiError", description="Error")
 
 
 def _json_request(schema_ref: str) -> dict[str, Any]:
@@ -82,35 +88,50 @@ _OPENAPI_SPEC: dict[str, Any] = {
             "get": {
                 "summary": "Get analysis status for a business date",
                 "parameters": [_BUSINESS_DATE_PARAMETER],
-                "responses": {"200": _json_response("#/components/schemas/BusinessDateStatus")},
+                "responses": {
+                    "200": _json_response("#/components/schemas/BusinessDateStatus"),
+                    "default": _error_response(),
+                },
             }
         },
         "/business-dates/{business_date}/candidates": {
             "get": {
                 "summary": "List recommendation candidates for a business date",
                 "parameters": [_BUSINESS_DATE_PARAMETER],
-                "responses": {"200": _json_response("#/components/schemas/CandidateList")},
+                "responses": {
+                    "200": _json_response("#/components/schemas/CandidateList"),
+                    "default": _error_response(),
+                },
             }
         },
         "/business-dates/{business_date}/candidates/{recommendation_id}": {
             "get": {
                 "summary": "Get one recommendation candidate explanation",
                 "parameters": [_BUSINESS_DATE_PARAMETER, _RECOMMENDATION_ID_PARAMETER],
-                "responses": {"200": _json_response("#/components/schemas/CandidateDetail")},
+                "responses": {
+                    "200": _json_response("#/components/schemas/CandidateDetail"),
+                    "default": _error_response(),
+                },
             }
         },
         "/reviews/import": {
             "post": {
                 "summary": "Import analyst review records",
                 "requestBody": _json_request("#/components/schemas/ReviewImportRequest"),
-                "responses": {"200": _json_response("#/components/schemas/ReviewImportResponse")},
+                "responses": {
+                    "200": _json_response("#/components/schemas/ReviewImportResponse"),
+                    "default": _error_response(),
+                },
             }
         },
         "/reviews/confirmed-list": {
             "post": {
                 "summary": "Build the current confirmed review checklist",
                 "requestBody": _json_request("#/components/schemas/ConfirmedReviewListRequest"),
-                "responses": {"200": _json_response("#/components/schemas/ConfirmedReviewList")},
+                "responses": {
+                    "200": _json_response("#/components/schemas/ConfirmedReviewList"),
+                    "default": _error_response(),
+                },
             }
         },
         "/reviews/archives": {
@@ -121,7 +142,8 @@ _OPENAPI_SPEC: dict[str, Any] = {
                     "201": _json_response(
                         "#/components/schemas/ConfirmedReviewArchive",
                         description="Created",
-                    )
+                    ),
+                    "default": _error_response(),
                 },
             }
         },
@@ -129,19 +151,41 @@ _OPENAPI_SPEC: dict[str, Any] = {
             "post": {
                 "summary": "Request an Excel-compatible export artifact",
                 "requestBody": _json_request("#/components/schemas/ExcelExportRequest"),
-                "responses": {"202": _json_response("#/components/schemas/ExportJob")},
+                "responses": {
+                    "202": _json_response("#/components/schemas/ExportJob"),
+                    "default": _error_response(),
+                },
             }
         },
         "/exports/{job_id}": {
             "get": {
                 "summary": "Get an export artifact status",
                 "parameters": [_JOB_ID_PARAMETER],
-                "responses": {"200": _json_response("#/components/schemas/ExportJob")},
+                "responses": {
+                    "200": _json_response("#/components/schemas/ExportJob"),
+                    "default": _error_response(),
+                },
             }
         },
     },
     "components": {
         "schemas": {
+            "ApiError": {
+                "type": "object",
+                "required": ["code", "message"],
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "enum": [code.value for code in ErrorCode],
+                    },
+                    "message": {"type": "string"},
+                    "details": {
+                        "type": "object",
+                        "additionalProperties": True,
+                    },
+                },
+                "additionalProperties": False,
+            },
             "BusinessDateStatus": {
                 "type": "object",
                 "required": ["business_date", "status", "risk_notice"],
