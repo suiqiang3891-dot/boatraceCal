@@ -448,6 +448,67 @@ def test_review_store_import_command_upserts_browser_review_export(tmp_path: Pat
     assert store_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_review_workflow_import_command_writes_openapi_response(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    input_path = tmp_path / "browser" / "reviews.json"
+    output_path = tmp_path / "responses" / "review-import.json"
+    input_path.parent.mkdir(parents=True)
+    input_path.write_text(
+        json.dumps(
+            {
+                "reviews": [
+                    {
+                        "recommendation_id": "rec-api-1",
+                        "race_id": "20250102-01-01",
+                        "decision": "confirmed",
+                        "stake_units": 2,
+                        "notes": "api handoff",
+                        "reviewed_at": "2026-07-11T03:20:00+00:00",
+                        "reviewed_by": "browser-analyst",
+                    },
+                    {
+                        "recommendation_id": "rec-api-pass",
+                        "race_id": "20250102-01-02",
+                        "decision": "pass",
+                        "stake_units": 0,
+                        "notes": "skip",
+                        "reviewed_at": "2026-07-11T03:30:00+00:00",
+                        "reviewed_by": "browser-analyst",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "review-workflow-import",
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(tmp_path / "exports"),
+            "--reviews",
+            str(input_path),
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    assert json.loads(output_path.read_text(encoding="utf-8")) == {"stored_count": 2}
+    stored_reviews = json.loads(store_path.read_text(encoding="utf-8"))
+    assert [review["recommendation_id"] for review in stored_reviews] == [
+        "rec-api-1",
+        "rec-api-pass",
+    ]
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path) -> None:
     store_path = tmp_path / "server" / "reviews.json"
     archive_dir = tmp_path / "archives"

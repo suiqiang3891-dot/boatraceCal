@@ -51,6 +51,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_confirmed_review_list(args)
     if args.command == "review-store-import":
         return _run_review_store_import(args)
+    if args.command == "review-workflow-import":
+        return _run_review_workflow_import(args)
     if args.command == "confirmed-review-archive":
         return _run_confirmed_review_archive(args)
     if args.command == "confirmed-review-excel":
@@ -129,6 +131,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     review_import.add_argument("--store", required=True, type=Path)
     review_import.add_argument("--reviews", required=True, type=Path)
+
+    review_workflow_import = subparsers.add_parser(
+        "review-workflow-import",
+        help="Import review records through the OpenAPI review workflow service.",
+    )
+    _add_review_workflow_service_arguments(review_workflow_import)
+    review_workflow_import.add_argument("--reviews", required=True, type=Path)
+    review_workflow_import.add_argument("--output", required=True, type=Path)
 
     archive = subparsers.add_parser(
         "confirmed-review-archive",
@@ -280,6 +290,13 @@ def _run_confirmed_review_list(args: argparse.Namespace) -> int:
 
 def _run_review_store_import(args: argparse.Namespace) -> int:
     FileReviewStore(args.store).upsert_reviews(load_reviews_json(args.reviews))
+    return 0
+
+
+def _run_review_workflow_import(args: argparse.Namespace) -> int:
+    request_payload = json.loads(args.reviews.read_text(encoding="utf-8"))
+    payload = _review_workflow_service(args).import_reviews(request_payload)
+    _write_json(args.output, payload)
     return 0
 
 
