@@ -566,7 +566,6 @@ function DetailPanel({
             <RotateCcw size={15} aria-hidden="true" />
           </button>
         </div>
-        <p className="inline-hint">审核修改会自动保存到当前浏览器，接入 API 后再迁移为服务端持久化。</p>
       </section>
     </>
   );

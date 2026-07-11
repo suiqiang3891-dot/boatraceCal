@@ -562,13 +562,6 @@ th.sticky-col {
   resize: vertical;
 }
 
-.inline-hint {
-  margin: 8px 0 0;
-  color: #64748b;
-  font-size: 0.76rem;
-  font-weight: 650;
-}
-
 .context-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
