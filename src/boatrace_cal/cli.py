@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from boatrace_cal.api_contract import export_openapi_spec_json
+from boatrace_cal.api_services import CandidateQueryService
 from boatrace_cal.backtest.export import export_backtest_report_json
 from boatrace_cal.backtest.runner import run_backtest
 from boatrace_cal.domain.bets import BetType
@@ -35,6 +36,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "backtest-report":
         return _run_backtest_report(args)
+    if args.command == "candidate-status":
+        return _run_candidate_status(args)
+    if args.command == "candidate-list":
+        return _run_candidate_list(args)
+    if args.command == "candidate-detail":
+        return _run_candidate_detail(args)
     if args.command == "historical-quality-report":
         return _run_historical_quality_report(args)
     if args.command == "confirmed-review-list":
@@ -77,6 +84,25 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_expected_race_arguments(backtest)
     backtest.add_argument("--bet-type", required=True, action="append")
     backtest.add_argument("--output", required=True, type=Path)
+
+    candidate_status = subparsers.add_parser(
+        "candidate-status",
+        help="Write the analysis status for one business date from a backtest report.",
+    )
+    _add_candidate_report_arguments(candidate_status)
+
+    candidate_list = subparsers.add_parser(
+        "candidate-list",
+        help="Write candidate summaries for one business date from a backtest report.",
+    )
+    _add_candidate_report_arguments(candidate_list)
+
+    candidate_detail = subparsers.add_parser(
+        "candidate-detail",
+        help="Write one candidate explanation from a backtest report.",
+    )
+    _add_candidate_report_arguments(candidate_detail)
+    candidate_detail.add_argument("--recommendation-id", required=True)
 
     confirmed = subparsers.add_parser(
         "confirmed-review-list",
@@ -132,6 +158,12 @@ def _add_expected_race_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--race-nos")
 
 
+def _add_candidate_report_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--business-date", required=True)
+    parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+
+
 def _run_backtest_report(args: argparse.Namespace) -> int:
     report = run_backtest(
         recommendations=load_recommendations_csv(args.recommendations),
@@ -158,6 +190,27 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return 0
+
+
+def _run_candidate_status(args: argparse.Namespace) -> int:
+    payload = _candidate_service(args).get_business_date_status(args.business_date)
+    _write_json(args.output, payload)
+    return 0
+
+
+def _run_candidate_list(args: argparse.Namespace) -> int:
+    payload = _candidate_service(args).list_candidates(args.business_date)
+    _write_json(args.output, payload)
+    return 0
+
+
+def _run_candidate_detail(args: argparse.Namespace) -> int:
+    payload = _candidate_service(args).get_candidate_detail(
+        args.business_date,
+        args.recommendation_id,
+    )
+    _write_json(args.output, payload)
     return 0
 
 
@@ -211,6 +264,18 @@ def _run_confirmed_review_excel(args: argparse.Namespace) -> int:
 def _run_openapi_spec(args: argparse.Namespace) -> int:
     export_openapi_spec_json(args.output)
     return 0
+
+
+def _candidate_service(args: argparse.Namespace) -> CandidateQueryService:
+    return CandidateQueryService(report_paths={args.business_date: args.report})
+
+
+def _write_json(output_path: Path, payload: object) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _collect_expected_races(args: argparse.Namespace) -> tuple[RaceId, ...]:

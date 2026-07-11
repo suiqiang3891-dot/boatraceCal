@@ -220,6 +220,95 @@ def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_candidate_status_command_writes_business_date_status(tmp_path: Path) -> None:
+    output_path = tmp_path / "api" / "status.json"
+
+    exit_code = main(
+        (
+            "candidate-status",
+            "--business-date",
+            "2025-01-02",
+            "--report",
+            "examples/sample_backtest/report.json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "business_date": "2025-01-02",
+        "status": "ready",
+        "risk_notice": (
+            "历史表现不代表未来结果；本系统只提供分析与回测，"
+            "不承诺盈利，不提供自动下单。"
+        ),
+    }
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_candidate_list_command_writes_candidate_summaries(tmp_path: Path) -> None:
+    output_path = tmp_path / "api" / "candidates.json"
+
+    exit_code = main(
+        (
+            "candidate-list",
+            "--business-date",
+            "2025-01-02",
+            "--report",
+            "examples/sample_backtest/report.json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["business_date"] == "2025-01-02"
+    assert [candidate["recommendation_id"] for candidate in payload["candidates"]] == [
+        "sample-rec-hit",
+        "sample-rec-miss",
+    ]
+    assert payload["candidates"][0]["decision"] == "select"
+    assert payload["candidates"][0]["stake_units"] == 1
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_candidate_detail_command_writes_explanation(tmp_path: Path) -> None:
+    output_path = tmp_path / "api" / "candidate-detail.json"
+
+    exit_code = main(
+        (
+            "candidate-detail",
+            "--business-date",
+            "2025-01-02",
+            "--recommendation-id",
+            "sample-rec-hit",
+            "--report",
+            "examples/sample_backtest/report.json",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["recommendation_id"] == "sample-rec-hit"
+    assert payload["race_id"] == "20250102-01-01"
+    assert payload["versions"] == {
+        "data": "sample-data-v1",
+        "feature": "sample-feature-v1",
+        "model": "sample-model-v1",
+        "strategy": "sample-strategy-v1",
+    }
+    assert payload["explanation"] == (
+        "模型概率 25.0%，市场赔率 5.20，期望值 +30.0%；"
+        "置信度 high，原因 positive_ev / sample。"
+    )
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_confirmed_review_list_command_writes_confirmed_reviews(tmp_path: Path) -> None:
     reviews_path = tmp_path / "reviews.json"
     output_path = tmp_path / "reviews" / "confirmed-list.json"
