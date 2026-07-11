@@ -17,6 +17,7 @@ from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
 from boatrace_cal.review_archive import freeze_confirmed_review_list
+from boatrace_cal.review_excel import export_confirmed_review_list_xlsx
 from boatrace_cal.review_store import FileReviewStore
 from boatrace_cal.reviews import (
     build_confirmed_review_list,
@@ -42,6 +43,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_review_store_import(args)
     if args.command == "confirmed-review-archive":
         return _run_confirmed_review_archive(args)
+    if args.command == "confirmed-review-excel":
+        return _run_confirmed_review_excel(args)
     if args.command == "openapi-spec":
         return _run_openapi_spec(args)
     parser.print_help()
@@ -103,6 +106,16 @@ def _build_parser() -> argparse.ArgumentParser:
     archive.add_argument("--frozen-at", required=True)
     archive.add_argument("--frozen-by", required=True)
     archive.add_argument("--archive-dir", required=True, type=Path)
+
+    review_excel = subparsers.add_parser(
+        "confirmed-review-excel",
+        help="Export analyst-confirmed review store entries as an XLSX checklist.",
+    )
+    review_excel.add_argument("--store", required=True, type=Path)
+    review_excel.add_argument("--business-date", required=True)
+    review_excel.add_argument("--generated-at", required=True)
+    review_excel.add_argument("--generated-by", required=True)
+    review_excel.add_argument("--output", required=True, type=Path)
 
     openapi = subparsers.add_parser(
         "openapi-spec",
@@ -182,6 +195,16 @@ def _run_confirmed_review_archive(args: argparse.Namespace) -> int:
         frozen_at=_parse_datetime(args.frozen_at, "frozen-at"),
         frozen_by=args.frozen_by,
     )
+    return 0
+
+
+def _run_confirmed_review_excel(args: argparse.Namespace) -> int:
+    review_list = FileReviewStore(args.store).build_confirmed_review_list(
+        business_date=args.business_date,
+        generated_at=_parse_datetime(args.generated_at, "generated-at"),
+        generated_by=args.generated_by,
+    )
+    export_confirmed_review_list_xlsx(review_list, args.output)
     return 0
 
 

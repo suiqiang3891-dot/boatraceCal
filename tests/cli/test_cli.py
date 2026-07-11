@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tomllib
+from zipfile import ZipFile
 
 from boatrace_cal.cli import main
 
@@ -419,6 +420,62 @@ def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path
     assert [entry["recommendation_id"] for entry in payload["checklist"]["entries"]] == [
         "rec-1"
     ]
+
+
+def test_confirmed_review_excel_command_exports_store_checklist(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    output_path = tmp_path / "exports" / "confirmed.xlsx"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-1",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 3,
+                    "notes": "keep",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+                {
+                    "recommendation_id": "rec-pass",
+                    "race_id": "20250102-01-02",
+                    "decision": "pass",
+                    "stake_units": 0,
+                    "notes": "skip",
+                    "reviewed_at": "2026-07-11T03:30:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "confirmed-review-excel",
+            "--store",
+            str(store_path),
+            "--business-date",
+            "2025-01-02",
+            "--generated-at",
+            "2026-07-11T04:00:00+00:00",
+            "--generated-by",
+            "analyst",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    with ZipFile(output_path) as workbook:
+        sheet_xml = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    assert "boatraceCal confirmed review list" in sheet_xml
+    assert "rec-1" in sheet_xml
+    assert "rec-pass" not in sheet_xml
 
 
 def test_openapi_spec_command_writes_contract(tmp_path: Path) -> None:
