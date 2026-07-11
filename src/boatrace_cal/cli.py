@@ -53,6 +53,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_review_store_import(args)
     if args.command == "review-workflow-import":
         return _run_review_workflow_import(args)
+    if args.command == "review-workflow-confirmed-list":
+        return _run_review_workflow_confirmed_list(args)
+    if args.command == "review-workflow-archive":
+        return _run_review_workflow_archive(args)
     if args.command == "confirmed-review-archive":
         return _run_confirmed_review_archive(args)
     if args.command == "confirmed-review-excel":
@@ -140,6 +144,22 @@ def _build_parser() -> argparse.ArgumentParser:
     review_workflow_import.add_argument("--reviews", required=True, type=Path)
     review_workflow_import.add_argument("--output", required=True, type=Path)
 
+    review_workflow_confirmed = subparsers.add_parser(
+        "review-workflow-confirmed-list",
+        help="Build the confirmed review checklist through the OpenAPI workflow service.",
+    )
+    _add_review_workflow_service_arguments(review_workflow_confirmed)
+    _add_review_list_request_arguments(review_workflow_confirmed)
+
+    review_workflow_archive = subparsers.add_parser(
+        "review-workflow-archive",
+        help="Freeze a confirmed review checklist through the OpenAPI workflow service.",
+    )
+    _add_review_workflow_service_arguments(review_workflow_archive)
+    _add_review_list_request_arguments(review_workflow_archive)
+    review_workflow_archive.add_argument("--frozen-at", required=True)
+    review_workflow_archive.add_argument("--frozen-by", required=True)
+
     archive = subparsers.add_parser(
         "confirmed-review-archive",
         help="Freeze confirmed review store entries as an immutable archive artifact.",
@@ -221,6 +241,13 @@ def _add_review_workflow_service_arguments(parser: argparse.ArgumentParser) -> N
     parser.add_argument("--export-dir", required=True, type=Path)
 
 
+def _add_review_list_request_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--business-date", required=True)
+    parser.add_argument("--generated-at", required=True)
+    parser.add_argument("--generated-by", required=True)
+    parser.add_argument("--output", required=True, type=Path)
+
+
 def _run_backtest_report(args: argparse.Namespace) -> int:
     report = run_backtest(
         recommendations=load_recommendations_csv(args.recommendations),
@@ -296,6 +323,32 @@ def _run_review_store_import(args: argparse.Namespace) -> int:
 def _run_review_workflow_import(args: argparse.Namespace) -> int:
     request_payload = json.loads(args.reviews.read_text(encoding="utf-8"))
     payload = _review_workflow_service(args).import_reviews(request_payload)
+    _write_json(args.output, payload)
+    return 0
+
+
+def _run_review_workflow_confirmed_list(args: argparse.Namespace) -> int:
+    payload = _review_workflow_service(args).build_confirmed_review_list(
+        {
+            "business_date": args.business_date,
+            "generated_at": args.generated_at,
+            "generated_by": args.generated_by,
+        }
+    )
+    _write_json(args.output, payload)
+    return 0
+
+
+def _run_review_workflow_archive(args: argparse.Namespace) -> int:
+    payload = _review_workflow_service(args).freeze_confirmed_review_archive(
+        {
+            "business_date": args.business_date,
+            "generated_at": args.generated_at,
+            "generated_by": args.generated_by,
+            "frozen_at": args.frozen_at,
+            "frozen_by": args.frozen_by,
+        }
+    )
     _write_json(args.output, payload)
     return 0
 

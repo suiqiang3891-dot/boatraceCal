@@ -509,6 +509,125 @@ def test_review_workflow_import_command_writes_openapi_response(tmp_path: Path) 
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_review_workflow_confirmed_list_command_writes_openapi_response(
+    tmp_path: Path,
+) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    output_path = tmp_path / "responses" / "confirmed-list.json"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-confirmed",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 2,
+                    "notes": "keep",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+                {
+                    "recommendation_id": "rec-pass",
+                    "race_id": "20250102-01-02",
+                    "decision": "pass",
+                    "stake_units": 0,
+                    "notes": "skip",
+                    "reviewed_at": "2026-07-11T03:30:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "review-workflow-confirmed-list",
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(tmp_path / "exports"),
+            "--business-date",
+            "2025-01-02",
+            "--generated-at",
+            "2026-07-11T04:00:00+00:00",
+            "--generated-by",
+            "analyst",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["business_date"] == "2025-01-02"
+    assert payload["total_stake_units"] == 2
+    assert [entry["recommendation_id"] for entry in payload["entries"]] == ["rec-confirmed"]
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_review_workflow_archive_command_writes_openapi_response(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    archive_dir = tmp_path / "archives"
+    output_path = tmp_path / "responses" / "archive.json"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-confirmed",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 1,
+                    "notes": "freeze",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "analyst",
+                }
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "review-workflow-archive",
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(archive_dir),
+            "--export-dir",
+            str(tmp_path / "exports"),
+            "--business-date",
+            "2025-01-02",
+            "--generated-at",
+            "2026-07-11T04:00:00+00:00",
+            "--generated-by",
+            "analyst",
+            "--frozen-at",
+            "2026-07-11T04:10:00+00:00",
+            "--frozen-by",
+            "analyst",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "confirmed_review_list"
+    assert payload["schema_version"] == "confirmed-review-list-v1"
+    assert payload["checklist"]["total_stake_units"] == 1
+    assert (archive_dir / f"{payload['version_id']}.json").exists()
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path) -> None:
     store_path = tmp_path / "server" / "reviews.json"
     archive_dir = tmp_path / "archives"
