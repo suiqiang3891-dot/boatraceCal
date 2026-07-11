@@ -28,6 +28,22 @@ def test_openapi_contract_exposes_review_workflow_without_prediction_mutation() 
     assert "RecommendationReview" in spec["components"]["schemas"]
     assert "ConfirmedReviewList" in spec["components"]["schemas"]
     assert "ConfirmedReviewArchive" in spec["components"]["schemas"]
+    excel_request = spec["components"]["schemas"]["ExcelExportRequest"]
+    assert excel_request["required"] == [
+        "business_date",
+        "export_type",
+        "generated_at",
+        "generated_by",
+    ]
+    assert excel_request["properties"]["export_type"]["enum"] == [
+        "review_table",
+        "confirmed_list",
+    ]
+    export_job = spec["components"]["schemas"]["ExportJob"]
+    assert export_job["properties"]["artifact_path"]["type"] == "string"
+    assert export_job["properties"]["content_type"]["const"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
     for path in spec["paths"].values():
         assert not any(method in path for method in ("put", "patch", "delete"))
 

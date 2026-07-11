@@ -5,12 +5,24 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
-from boatrace_cal.reviews import ConfirmedReviewList
+from boatrace_cal.reviews import RISK_NOTICE, ConfirmedReviewList, RecommendationReview
+
+
+XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 _WORKSHEET_HEADERS = (
     "recommendation_id",
     "race_id",
+    "stake_units",
+    "notes",
+    "reviewed_at",
+    "reviewed_by",
+)
+_REVIEW_TABLE_HEADERS = (
+    "recommendation_id",
+    "race_id",
+    "decision",
     "stake_units",
     "notes",
     "reviewed_at",
@@ -52,16 +64,80 @@ def export_confirmed_review_list_xlsx(
         for entry in review_list.entries
     )
 
+    _write_xlsx_workbook(
+        rows,
+        output_path,
+        sheet_name="confirmed_reviews",
+        created_at=review_list.generated_at.isoformat(),
+        creator=review_list.generated_by,
+    )
+    return output_path
+
+
+def export_review_table_xlsx(
+    reviews: tuple[RecommendationReview, ...],
+    path: Path | str,
+    *,
+    business_date: str,
+    generated_at: str,
+    generated_by: str,
+    risk_notice: str = RISK_NOTICE,
+) -> Path:
+    """Write all analyst review records as a minimal XLSX workbook."""
+
+    if type(reviews) is not tuple or any(type(review) is not RecommendationReview for review in reviews):
+        raise ValueError("reviews must be a tuple of RecommendationReview")
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    rows: list[tuple[object, ...]] = [
+        ("boatraceCal review table",),
+        ("business_date", business_date),
+        ("generated_at", generated_at),
+        ("generated_by", generated_by),
+        ("risk_notice", risk_notice),
+        ("review_count", len(reviews)),
+        (),
+        _REVIEW_TABLE_HEADERS,
+    ]
+    rows.extend(
+        (
+            review.recommendation_id,
+            review.race_id,
+            review.decision.value,
+            review.stake_units,
+            review.notes,
+            review.reviewed_at.isoformat(),
+            review.reviewed_by,
+        )
+        for review in reviews
+    )
+    _write_xlsx_workbook(
+        rows,
+        output_path,
+        sheet_name="review_table",
+        created_at=generated_at,
+        creator=generated_by,
+    )
+    return output_path
+
+
+def _write_xlsx_workbook(
+    rows: Sequence[Sequence[object]],
+    output_path: Path,
+    *,
+    sheet_name: str,
+    created_at: str,
+    creator: str,
+) -> None:
     with ZipFile(output_path, mode="w") as workbook:
         _write_workbook_part(workbook, "[Content_Types].xml", _content_types_xml())
         _write_workbook_part(workbook, "_rels/.rels", _package_relationships_xml())
-        _write_workbook_part(workbook, "docProps/app.xml", _app_properties_xml())
-        _write_workbook_part(workbook, "docProps/core.xml", _core_properties_xml(review_list))
-        _write_workbook_part(workbook, "xl/workbook.xml", _workbook_xml())
+        _write_workbook_part(workbook, "docProps/app.xml", _app_properties_xml(sheet_name))
+        _write_workbook_part(workbook, "docProps/core.xml", _core_properties_xml(created_at, creator))
+        _write_workbook_part(workbook, "xl/workbook.xml", _workbook_xml(sheet_name))
         _write_workbook_part(workbook, "xl/_rels/workbook.xml.rels", _workbook_relationships_xml())
         _write_workbook_part(workbook, "xl/styles.xml", _styles_xml())
         _write_workbook_part(workbook, "xl/worksheets/sheet1.xml", _worksheet_xml(rows))
-    return output_path
 
 
 def _write_workbook_part(workbook: ZipFile, name: str, content: str) -> None:
@@ -147,11 +223,11 @@ def _package_relationships_xml() -> str:
 """
 
 
-def _workbook_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+def _workbook_xml(sheet_name: str) -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheets>
-    <sheet name="confirmed_reviews" sheetId="1" r:id="rId1"/>
+    <sheet name="{escape(sheet_name)}" sheetId="1" r:id="rId1"/>
   </sheets>
 </workbook>
 """
@@ -179,8 +255,9 @@ def _styles_xml() -> str:
 """
 
 
-def _app_properties_xml() -> str:
-    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+def _app_properties_xml(sheet_name: str) -> str:
+    escaped_sheet_name = escape(sheet_name)
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
   <Application>boatraceCal</Application>
   <DocSecurity>0</DocSecurity>
@@ -193,16 +270,16 @@ def _app_properties_xml() -> str:
   </HeadingPairs>
   <TitlesOfParts>
     <vt:vector size="1" baseType="lpstr">
-      <vt:lpstr>confirmed_reviews</vt:lpstr>
+      <vt:lpstr>{escaped_sheet_name}</vt:lpstr>
     </vt:vector>
   </TitlesOfParts>
 </Properties>
 """
 
 
-def _core_properties_xml(review_list: ConfirmedReviewList) -> str:
-    created = escape(review_list.generated_at.isoformat())
-    creator = escape(review_list.generated_by)
+def _core_properties_xml(created_at: str, creator: str) -> str:
+    created = escape(created_at)
+    creator = escape(creator)
     return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:creator>{creator}</dc:creator>

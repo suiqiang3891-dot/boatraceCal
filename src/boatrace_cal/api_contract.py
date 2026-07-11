@@ -325,22 +325,37 @@ _OPENAPI_SPEC: dict[str, Any] = {
             },
             "ExcelExportRequest": {
                 "type": "object",
-                "required": ["business_date", "export_type"],
+                "required": [
+                    "business_date",
+                    "export_type",
+                    "generated_at",
+                    "generated_by",
+                ],
                 "properties": {
                     "business_date": {"type": "string"},
                     "export_type": {
                         "type": "string",
                         "enum": ["review_table", "confirmed_list"],
                     },
+                    "generated_at": {"type": "string", "format": "date-time"},
+                    "generated_by": {"type": "string"},
                 },
                 "additionalProperties": False,
             },
             "ExportJob": {
                 "type": "object",
-                "required": ["job_id", "status"],
+                "required": ["job_id", "status", "artifact_path", "content_type"],
                 "properties": {
                     "job_id": {"type": "string"},
                     "status": {"type": "string", "enum": ["queued", "running", "done", "failed"]},
+                    "artifact_path": {"type": "string"},
+                    "content_type": {
+                        "type": "string",
+                        "const": (
+                            "application/vnd.openxmlformats-officedocument."
+                            "spreadsheetml.sheet"
+                        ),
+                    },
                 },
                 "additionalProperties": False,
             },
