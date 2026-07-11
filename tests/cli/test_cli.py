@@ -624,6 +624,78 @@ def test_review_table_excel_command_exports_all_store_reviews(tmp_path: Path) ->
     assert "review_count" in sheet_xml
 
 
+def test_review_workflow_export_command_writes_queryable_export_job(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    export_dir = tmp_path / "exports"
+    job_status_path = tmp_path / "api" / "job-status.json"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-confirmed",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 2,
+                    "notes": "keep",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "analyst",
+                }
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    export_exit_code = main(
+        (
+            "review-workflow-export",
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(export_dir),
+            "--business-date",
+            "2025-01-02",
+            "--export-type",
+            "confirmed_list",
+            "--generated-at",
+            "2026-07-11T04:00:00+00:00",
+            "--generated-by",
+            "analyst",
+        )
+    )
+    status_exit_code = main(
+        (
+            "export-job-status",
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(export_dir),
+            "--job-id",
+            "confirmed-list-2025-01-02",
+            "--output",
+            str(job_status_path),
+        )
+    )
+
+    assert export_exit_code == 0
+    assert status_exit_code == 0
+    payload = json.loads(job_status_path.read_text(encoding="utf-8"))
+    assert payload["job_id"] == "confirmed-list-2025-01-02"
+    assert payload["status"] == "done"
+    assert payload["artifact_path"].endswith("confirmed-list-2025-01-02.xlsx")
+    assert payload["content_type"] == (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert (export_dir / "confirmed-list-2025-01-02.json").exists()
+    assert job_status_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_openapi_spec_command_writes_contract(tmp_path: Path) -> None:
     output_path = tmp_path / "api" / "openapi.json"
 

@@ -84,6 +84,9 @@ def test_review_workflow_service_imports_reviews_and_exports_confirmed_artifacts
         sheet_xml = workbook.read("xl/worksheets/sheet1.xml").decode("utf-8")
     assert "rec-confirmed" in sheet_xml
     assert "rec-pass" not in sheet_xml
+    assert service.get_export_job("confirmed-list-2025-01-02") == export_job
+    manifest_path = tmp_path / "exports" / "confirmed-list-2025-01-02.json"
+    assert json.loads(manifest_path.read_text(encoding="utf-8")) == export_job
 
 
 def test_review_workflow_service_exports_full_review_table_xlsx(tmp_path: Path) -> None:
@@ -156,6 +159,21 @@ def test_review_workflow_service_rejects_unknown_export_type(tmp_path: Path) -> 
         assert "export_type" in str(error)
     else:
         raise AssertionError("unknown export_type should be rejected")
+
+
+def test_review_workflow_service_rejects_unknown_export_job(tmp_path: Path) -> None:
+    service = ReviewWorkflowService(
+        review_store_path=tmp_path / "reviews.json",
+        archive_dir=tmp_path / "archives",
+        export_dir=tmp_path / "exports",
+    )
+
+    try:
+        service.get_export_job("missing-job")
+    except ValueError as error:
+        assert "job_id" in str(error)
+    else:
+        raise AssertionError("missing export job should be rejected")
 
 
 def test_review_workflow_service_archive_response_matches_written_file(tmp_path: Path) -> None:

@@ -18,7 +18,11 @@ def test_openapi_contract_exposes_review_workflow_without_prediction_mutation() 
         "/reviews/confirmed-list",
         "/reviews/archives",
         "/exports/excel",
+        "/exports/{job_id}",
     }
+    assert spec["paths"]["/exports/{job_id}"]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"] == {"$ref": "#/components/schemas/ExportJob"}
     assert spec["paths"]["/reviews/import"]["post"]["requestBody"]["content"][
         "application/json"
     ]["schema"] == {"$ref": "#/components/schemas/ReviewImportRequest"}

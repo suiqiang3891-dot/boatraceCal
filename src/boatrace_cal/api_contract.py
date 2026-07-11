@@ -60,6 +60,13 @@ _RECOMMENDATION_ID_PARAMETER: dict[str, Any] = {
     "schema": {"type": "string", "minLength": 1},
 }
 
+_JOB_ID_PARAMETER: dict[str, Any] = {
+    "name": "job_id",
+    "in": "path",
+    "required": True,
+    "schema": {"type": "string", "minLength": 1},
+}
+
 _OPENAPI_SPEC: dict[str, Any] = {
     "openapi": "3.1.0",
     "info": {
@@ -123,6 +130,13 @@ _OPENAPI_SPEC: dict[str, Any] = {
                 "summary": "Request an Excel-compatible export artifact",
                 "requestBody": _json_request("#/components/schemas/ExcelExportRequest"),
                 "responses": {"202": _json_response("#/components/schemas/ExportJob")},
+            }
+        },
+        "/exports/{job_id}": {
+            "get": {
+                "summary": "Get an export artifact status",
+                "parameters": [_JOB_ID_PARAMETER],
+                "responses": {"200": _json_response("#/components/schemas/ExportJob")},
             }
         },
     },

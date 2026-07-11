@@ -161,11 +161,29 @@ class ReviewWorkflowService:
         else:
             raise ValueError("export_type must be review_table or confirmed_list")
 
-        return {
+        export_job = {
             "job_id": job_id,
             "status": "done",
             "artifact_path": str(artifact_path),
             "content_type": XLSX_CONTENT_TYPE,
+        }
+        self._write_export_job(export_job)
+        return export_job
+
+    def get_export_job(self, job_id: str) -> dict[str, str]:
+        """Return the last known status for an export artifact."""
+
+        normalized_job_id = _required_plain_string(job_id, "job_id")
+        manifest_path = self._export_job_manifest_path(normalized_job_id)
+        if not manifest_path.exists():
+            raise ValueError(f"job_id not found: {normalized_job_id}")
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        export_job = _require_mapping(payload, "export job")
+        return {
+            "job_id": _required_string(export_job, "job_id"),
+            "status": _required_string(export_job, "status"),
+            "artifact_path": _required_string(export_job, "artifact_path"),
+            "content_type": _required_string(export_job, "content_type"),
         }
 
     def _build_confirmed_review_list_object(self, payload: object) -> ConfirmedReviewList:
@@ -178,6 +196,17 @@ class ReviewWorkflowService:
             ),
             generated_by=_required_string(request, "generated_by"),
         )
+
+    def _write_export_job(self, export_job: dict[str, str]) -> None:
+        manifest_path = self._export_job_manifest_path(export_job["job_id"])
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(
+            json.dumps(export_job, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    def _export_job_manifest_path(self, job_id: str) -> Path:
+        return self._export_dir / f"{_safe_file_part(job_id)}.json"
 
 
 def _require_mapping(payload: object, name: str) -> dict[str, object]:
@@ -288,11 +317,15 @@ def _format_signed_percent(value: Decimal) -> str:
 
 def _required_string(mapping: dict[str, object], key: str) -> str:
     value = mapping.get(key)
+    return _required_plain_string(value, key)
+
+
+def _required_plain_string(value: object, name: str) -> str:
     if type(value) is not str:
-        raise ValueError(f"{key} must be a string")
+        raise ValueError(f"{name} must be a string")
     normalized = value.strip()
     if not normalized:
-        raise ValueError(f"{key} must not be empty")
+        raise ValueError(f"{name} must not be empty")
     return normalized
 
 

@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from boatrace_cal.api_contract import export_openapi_spec_json
-from boatrace_cal.api_services import CandidateQueryService
+from boatrace_cal.api_services import CandidateQueryService, ReviewWorkflowService
 from boatrace_cal.backtest.export import export_backtest_report_json
 from boatrace_cal.backtest.runner import run_backtest
 from boatrace_cal.domain.bets import BetType
@@ -57,6 +57,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_confirmed_review_excel(args)
     if args.command == "review-table-excel":
         return _run_review_table_excel(args)
+    if args.command == "review-workflow-export":
+        return _run_review_workflow_export(args)
+    if args.command == "export-job-status":
+        return _run_export_job_status(args)
     if args.command == "openapi-spec":
         return _run_openapi_spec(args)
     parser.print_help()
@@ -158,6 +162,28 @@ def _build_parser() -> argparse.ArgumentParser:
     review_table_excel.add_argument("--generated-by", required=True)
     review_table_excel.add_argument("--output", required=True, type=Path)
 
+    review_workflow_export = subparsers.add_parser(
+        "review-workflow-export",
+        help="Export a review workflow XLSX artifact and persist its job status.",
+    )
+    _add_review_workflow_service_arguments(review_workflow_export)
+    review_workflow_export.add_argument("--business-date", required=True)
+    review_workflow_export.add_argument(
+        "--export-type",
+        required=True,
+        choices=("review_table", "confirmed_list"),
+    )
+    review_workflow_export.add_argument("--generated-at", required=True)
+    review_workflow_export.add_argument("--generated-by", required=True)
+
+    export_job_status = subparsers.add_parser(
+        "export-job-status",
+        help="Write the current status of a persisted export job.",
+    )
+    _add_review_workflow_service_arguments(export_job_status)
+    export_job_status.add_argument("--job-id", required=True)
+    export_job_status.add_argument("--output", required=True, type=Path)
+
     openapi = subparsers.add_parser(
         "openapi-spec",
         help="Write the OpenAPI contract JSON for the analysis API.",
@@ -177,6 +203,12 @@ def _add_candidate_report_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--business-date", required=True)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+
+
+def _add_review_workflow_service_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--store", required=True, type=Path)
+    parser.add_argument("--archive-dir", required=True, type=Path)
+    parser.add_argument("--export-dir", required=True, type=Path)
 
 
 def _run_backtest_report(args: argparse.Namespace) -> int:
@@ -288,6 +320,25 @@ def _run_review_table_excel(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_review_workflow_export(args: argparse.Namespace) -> int:
+    payload = _review_workflow_service(args).export_excel(
+        {
+            "business_date": args.business_date,
+            "export_type": args.export_type,
+            "generated_at": args.generated_at,
+            "generated_by": args.generated_by,
+        }
+    )
+    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def _run_export_job_status(args: argparse.Namespace) -> int:
+    payload = _review_workflow_service(args).get_export_job(args.job_id)
+    _write_json(args.output, payload)
+    return 0
+
+
 def _run_openapi_spec(args: argparse.Namespace) -> int:
     export_openapi_spec_json(args.output)
     return 0
@@ -295,6 +346,14 @@ def _run_openapi_spec(args: argparse.Namespace) -> int:
 
 def _candidate_service(args: argparse.Namespace) -> CandidateQueryService:
     return CandidateQueryService(report_paths={args.business_date: args.report})
+
+
+def _review_workflow_service(args: argparse.Namespace) -> ReviewWorkflowService:
+    return ReviewWorkflowService(
+        review_store_path=args.store,
+        archive_dir=args.archive_dir,
+        export_dir=args.export_dir,
+    )
 
 
 def _write_json(output_path: Path, payload: object) -> None:
