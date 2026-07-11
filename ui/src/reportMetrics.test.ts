@@ -66,6 +66,16 @@ test("buildDashboardModel formats report metrics for the smart table workbench",
     freshness: "2025-01-02 10:00 UTC",
     settlementLabel: "命中",
   });
+  const firstRow = model.smartTableRows[0];
+  expect(firstRow.probabilityDetail).toContain("模型概率 25.0%");
+  expect(firstRow.probabilityDetail).toContain("EV +30.0%");
+  expect(firstRow.marketComparison).toContain("市场赔率 5.20");
+  expect(firstRow.marketComparison).toContain("模型优势 +5.8个百分点");
+  expect(firstRow.alternatives).toBe(
+    "原因码 positive_ev / sample；策略建议 候选；历史回放 命中",
+  );
+  expect(firstRow.probabilityDetail).not.toContain("等待模型明细");
+  expect(firstRow.alternatives).not.toContain("等待策略明细");
 });
 
 test("buildDashboardModel uses waiting placeholders for unavailable market fields", () => {
@@ -89,6 +99,11 @@ test("buildDashboardModel uses waiting placeholders for unavailable market field
   expect(model.smartTableRows[0].impliedProbability).toBe("等待赛前数据");
   expect(model.smartTableRows[0].expectedValue).toBe("等待赛前数据");
   expect(model.smartTableRows[0].conservativeExpectedValue).toBe("等待赛前数据");
+  expect(model.smartTableRows[0].probabilityDetail).toContain("模型概率 25.0%");
+  expect(model.smartTableRows[0].probabilityDetail).toContain("EV 等待赛前数据");
+  expect(model.smartTableRows[0].marketComparison).toBe(
+    "市场赔率等待赛前数据；无法计算隐含概率差",
+  );
 });
 
 test("buildDashboardModel returns a safe empty model for blocked reports", () => {

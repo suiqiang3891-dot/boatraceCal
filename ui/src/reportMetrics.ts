@@ -234,6 +234,7 @@ function emptyEquityCurve(): NonNullable<BacktestReport["equity_curve"]> {
 
 function toSmartTableRow(item: Settlement): SmartTableRow {
   const parsedRace = parseRaceId(item.race_id);
+  const probability = Number(item.recommendation.probability);
   const odds = parseOptionalNumber(item.recommendation.odds);
   const expectedValue = parseOptionalNumber(item.recommendation.expected_value);
   const impliedProbability = odds === null ? null : 1 / odds;
@@ -247,7 +248,7 @@ function toSmartTableRow(item: Settlement): SmartTableRow {
     raceNo: `${parsedRace.raceNo}R`,
     startTime: WAITING_FOR_PRERACE_DATA,
     combination: `${betTypeLabel(item.settlement.combination.bet_type)} ${item.settlement.combination.lanes.join("-")}`,
-    modelProbability: formatPercent(Number(item.recommendation.probability)),
+    modelProbability: formatPercent(probability),
     marketOdds: odds === null ? WAITING_FOR_PRERACE_DATA : odds.toFixed(2),
     impliedProbability:
       impliedProbability === null ? WAITING_FOR_PRERACE_DATA : formatPercent(impliedProbability),
@@ -272,13 +273,10 @@ function toSmartTableRow(item: Settlement): SmartTableRow {
     featureVersion: item.recommendation.versions.feature,
     modelVersion: item.recommendation.versions.model,
     strategyVersion: item.recommendation.versions.strategy,
-    probabilityDetail: `六艇概率构成等待模型明细；当前组合模型概率 ${formatPercent(Number(item.recommendation.probability))}`,
-    marketComparison:
-      impliedProbability === null
-        ? "市场概率等待赛前数据"
-        : `市场隐含概率 ${formatPercent(impliedProbability)}`,
+    probabilityDetail: probabilityDetail(probability, expectedValue, conservativeExpectedValue),
+    marketComparison: marketComparison(probability, odds, impliedProbability),
     supportFactors: item.recommendation.reason_codes,
-    alternatives: "备选组合与拒绝原因等待策略明细",
+    alternatives: strategyExplanation(item.recommendation, item.settlement.status),
   };
 }
 
@@ -370,6 +368,47 @@ function decisionLabel(decision: RecommendationSnapshot["decision"]): string {
   return decision === "select" ? "候选" : "PASS";
 }
 
+function probabilityDetail(
+  probability: number,
+  expectedValue: number | null,
+  conservativeExpectedValue: number | null,
+): string {
+  const evDetail =
+    expectedValue === null
+      ? "EV 等待赛前数据"
+      : `EV ${formatSignedPercent(expectedValue)}`;
+  const conservativeDetail =
+    conservativeExpectedValue === null
+      ? "保守EV 等待赛前数据"
+      : `保守EV ${formatSignedPercent(conservativeExpectedValue)}`;
+  return `模型概率 ${formatPercent(probability)}；${evDetail}；${conservativeDetail}`;
+}
+
+function marketComparison(
+  probability: number,
+  odds: number | null,
+  impliedProbability: number | null,
+): string {
+  if (odds === null || impliedProbability === null) {
+    return "市场赔率等待赛前数据；无法计算隐含概率差";
+  }
+  const edge = probability - impliedProbability;
+  return `市场赔率 ${odds.toFixed(2)}，隐含概率 ${formatPercent(
+    impliedProbability,
+  )}；模型优势 ${formatSignedPointDelta(edge)}`;
+}
+
+function strategyExplanation(
+  recommendation: RecommendationSnapshot,
+  settlementStatus: Settlement["settlement"]["status"],
+): string {
+  const reasonCodes =
+    recommendation.reason_codes.length > 0 ? recommendation.reason_codes.join(" / ") : "未提供";
+  return `原因码 ${reasonCodes}；策略建议 ${decisionLabel(
+    recommendation.decision,
+  )}；历史回放 ${statusLabel(settlementStatus)}`;
+}
+
 function parseOptionalNumber(value: string | null): number | null {
   return value === null ? null : Number(value);
 }
@@ -385,6 +424,11 @@ function formatPercent(value: number): string {
 function formatSignedPercent(value: number): string {
   const prefix = value > 0 ? "+" : "";
   return `${prefix}${formatPercent(value)}`;
+}
+
+function formatSignedPointDelta(value: number): string {
+  const prefix = value > 0 ? "+" : "";
+  return `${prefix}${(value * 100).toFixed(1)}个百分点`;
 }
 
 function formatYen(value: string): string {

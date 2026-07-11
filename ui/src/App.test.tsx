@@ -37,7 +37,7 @@ test("App renders the first smart table workbench from the bundled sample report
   expect(screen.getByText("审核 已确认 0 / PASS 0 / 待审 2")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "行级详情" })).toBeInTheDocument();
   expect(screen.getByText("sample-data-v1")).toBeInTheDocument();
-  expect(screen.getByText(/六艇概率构成等待模型明细/)).toBeInTheDocument();
+  expect(screen.getByText(/模型概率 25.0%/)).toBeInTheDocument();
   expect(screen.getByText(/历史表现不代表未来结果/)).toBeInTheDocument();
 });
 
