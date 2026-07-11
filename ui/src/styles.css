@@ -285,6 +285,32 @@ dd {
   background: #dff7f1;
 }
 
+.table-controls {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.select-control select {
+  min-height: 30px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0 28px 0 9px;
+  color: #0f172a;
+  background: #ffffff;
+  font: inherit;
+}
+
 .filter-meta {
   display: inline-flex;
   flex-wrap: wrap;
@@ -654,6 +680,10 @@ th.sticky-col {
   .segment-control {
     width: 100%;
     overflow-x: auto;
+  }
+
+  .table-controls {
+    width: 100%;
   }
 
   .detail-actions {

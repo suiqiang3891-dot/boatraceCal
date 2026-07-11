@@ -19,12 +19,64 @@ function bytesFromBlobPart(part: BlobPart): Uint8Array {
   throw new Error("expected binary workbook blob part");
 }
 
+type ReportSettlement = NonNullable<BacktestReport["settlements"]>[number];
+
+function makeSettlement(
+  recommendationId: string,
+  raceId: string,
+  probability: string,
+): ReportSettlement {
+  return {
+    recommendation_id: recommendationId,
+    race_id: raceId,
+    stake_units: 1,
+    stake_yen: "100",
+    returned_yen: "0",
+    net_profit_yen: "-100",
+    recommendation: {
+      stage: "final",
+      decision: "select",
+      confidence: "medium",
+      probability,
+      odds: "4.2",
+      expected_value: "0.05",
+      as_of: [
+        raceId.slice(0, 4),
+        raceId.slice(4, 6),
+        `${raceId.slice(6, 8)}T09:30:00+00:00`,
+      ].join("-"),
+      stake_units: 1,
+      versions: {
+        data: "filter-data-v1",
+        feature: "filter-feature-v1",
+        model: "filter-model-v1",
+        strategy: "filter-strategy-v1",
+      },
+      reason_codes: [recommendationId],
+    },
+    settlement: {
+      status: "miss",
+      combination: {
+        bet_type: "trifecta_ordered",
+        lanes: [1, 2, 3],
+      },
+    },
+  };
+}
+
+function tableRaceOrder(): string[] {
+  return screen
+    .getAllByRole("button")
+    .map((button) => button.getAttribute("aria-label") ?? "")
+    .filter((label) => label.includes("202501"));
+}
+
 test("App renders the first smart table workbench from the bundled sample report", () => {
   render(<App />);
 
   expect(screen.getByRole("heading", { name: "BOAT RACE 智能表格工作台" })).toBeInTheDocument();
   expect(screen.getByText("业务日期")).toBeInTheDocument();
-  expect(screen.getByText("2025-01-02")).toBeInTheDocument();
+  expect(screen.getAllByText("2025-01-02").length).toBeGreaterThan(0);
   expect(screen.getByText("候选 2")).toBeInTheDocument();
   expect(screen.getAllByText("+¥900").length).toBeGreaterThan(0);
   expect(screen.getByRole("columnheader", { name: "场地" })).toBeInTheDocument();
@@ -146,7 +198,7 @@ test("App imports a local backtest report JSON into the workbench", async () => 
     target: { files: [file] },
   });
 
-  expect(await screen.findByText("2025-01-03")).toBeInTheDocument();
+  expect((await screen.findAllByText("2025-01-03")).length).toBeGreaterThan(0);
   expect(screen.getByText("imported-data-v1")).toBeInTheDocument();
   expect(screen.getAllByText(/imported_fixture/).length).toBeGreaterThan(0);
 });
@@ -161,6 +213,58 @@ test("App filters the smart table rows by decision state", () => {
   );
 
   expect(screen.getByText("没有可显示候选")).toBeInTheDocument();
+});
+
+test("App filters smart table rows by business date and venue and sorts by probability", () => {
+  const report: BacktestReport = {
+    readiness: {
+      status: "ready",
+      ready: true,
+    },
+    summary: {
+      expected_race_count: 3,
+      selected_bet_count: 3,
+      selected_race_count: 3,
+      hit_count: 0,
+      miss_count: 3,
+      net_profit_yen: "-300",
+      return_rate: "0",
+      hit_rate: "0",
+      total_stake_yen: "300",
+      total_returned_yen: "0",
+    },
+    equity_curve: {
+      final_equity_yen: "-300",
+      max_drawdown_yen: "300",
+      points: [],
+    },
+    slices: [],
+    settlements: [
+      makeSettlement("filter-low-old", "20250102-01-01", "0.18"),
+      makeSettlement("filter-high", "20250103-02-01", "0.41"),
+      makeSettlement("filter-low-new", "20250103-03-01", "0.12"),
+    ],
+  };
+
+  render(<App report={report} />);
+
+  fireEvent.change(screen.getByLabelText("排序方式"), {
+    target: { value: "probability-desc" },
+  });
+  expect(tableRaceOrder()[0]).toContain("20250103-02-01");
+
+  fireEvent.change(screen.getByLabelText("日期筛选"), {
+    target: { value: "2025-01-03" },
+  });
+  expect(tableRaceOrder()).toHaveLength(2);
+  expect(tableRaceOrder().join(" ")).not.toContain("20250102-01-01");
+
+  fireEvent.change(screen.getByLabelText("场地筛选"), {
+    target: { value: "03" },
+  });
+  expect(tableRaceOrder()).toEqual([
+    "选择 20250103-03-01 三连单 1-2-3",
+  ]);
 });
 
 test("App applies local review actions without changing the report contract", () => {

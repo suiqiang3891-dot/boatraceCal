@@ -25,6 +25,7 @@ import { createSingleSheetXlsx, type WorkbookRow } from "./xlsxExport";
 import "./styles.css";
 
 type FilterKey = "all" | "select" | "wait" | "pass" | "confirmed";
+type SortKey = "race-asc" | "probability-desc" | "expected-value-desc";
 
 const filters: Array<{ key: FilterKey; label: string }> = [
   { key: "all", label: "全部" },
@@ -33,6 +34,14 @@ const filters: Array<{ key: FilterKey; label: string }> = [
   { key: "pass", label: "PASS" },
   { key: "confirmed", label: "已确认" },
 ];
+
+const sortOptions: Array<{ key: SortKey; label: string }> = [
+  { key: "race-asc", label: "场次顺序" },
+  { key: "probability-desc", label: "模型概率优先" },
+  { key: "expected-value-desc", label: "EV 优先" },
+];
+
+const ALL_OPTION = "all";
 
 const REVIEW_STORAGE_PREFIX = "boatraceCal.reviewState";
 const REVIEW_EXPORT_USER = "browser-analyst";
@@ -79,13 +88,29 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
     loadReviewState(reviewStorageKey, model.smartTableRows),
   );
   const [filter, setFilter] = useState<FilterKey>("all");
+  const [businessDateFilter, setBusinessDateFilter] = useState(ALL_OPTION);
+  const [venueFilter, setVenueFilter] = useState(ALL_OPTION);
+  const [sortKey, setSortKey] = useState<SortKey>("race-asc");
   const reviewRows = useMemo(
     () => model.smartTableRows.map((row) => applyReviewState(row, reviewState[row.id])),
     [model.smartTableRows, reviewState],
   );
+  const businessDateOptions = useMemo(
+    () => uniqueSorted(reviewRows.map((row) => businessDateFromRaceId(row.raceId))),
+    [reviewRows],
+  );
+  const venueOptions = useMemo(
+    () => uniqueSorted(reviewRows.map((row) => row.venue)),
+    [reviewRows],
+  );
   const filteredRows = useMemo(
-    () => reviewRows.filter((row) => rowMatchesFilter(row, filter)),
-    [filter, reviewRows],
+    () =>
+      reviewRows
+        .filter((row) => rowMatchesFilter(row, filter))
+        .filter((row) => rowMatchesBusinessDate(row, businessDateFilter))
+        .filter((row) => rowMatchesVenue(row, venueFilter))
+        .sort(compareRows(sortKey)),
+    [businessDateFilter, filter, reviewRows, sortKey, venueFilter],
   );
   const [selectedRowId, setSelectedRowId] = useState(model.smartTableRows[0]?.id ?? "");
   const selectedRow = useMemo(
@@ -119,6 +144,9 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
       );
       setActiveReport(importedReport);
       setFilter("all");
+      setBusinessDateFilter(ALL_OPTION);
+      setVenueFilter(ALL_OPTION);
+      setSortKey("race-asc");
       setSelectedRowId(nextModel.smartTableRows[0]?.id ?? "");
       setReviewState(loadReviewState(nextStorageKey, nextModel.smartTableRows));
       setReportLoadError("");
@@ -282,6 +310,52 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
             </button>
           ))}
         </div>
+        <div className="table-controls" aria-label="表格筛选与排序">
+          <label className="select-control">
+            <span>日期</span>
+            <select
+              aria-label="日期筛选"
+              value={businessDateFilter}
+              onChange={(event) => setBusinessDateFilter(event.target.value)}
+            >
+              <option value={ALL_OPTION}>全部日期</option>
+              {businessDateOptions.map((businessDate) => (
+                <option value={businessDate} key={businessDate}>
+                  {businessDate}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="select-control">
+            <span>场地</span>
+            <select
+              aria-label="场地筛选"
+              value={venueFilter}
+              onChange={(event) => setVenueFilter(event.target.value)}
+            >
+              <option value={ALL_OPTION}>全部场地</option>
+              {venueOptions.map((venue) => (
+                <option value={venue} key={venue}>
+                  {venue}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="select-control">
+            <span>排序</span>
+            <select
+              aria-label="排序方式"
+              value={sortKey}
+              onChange={(event) => setSortKey(event.target.value as SortKey)}
+            >
+              {sortOptions.map((option) => (
+                <option value={option.key} key={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="filter-meta">
           <SlidersHorizontal size={16} aria-hidden="true" />
           <span>模型 {selectedRow?.modelVersion ?? "等待赛前数据"}</span>
@@ -387,6 +461,67 @@ function rowMatchesFilter(row: ReviewableRow, filter: FilterKey): boolean {
     return row.displayDecisionLabel === "PASS";
   }
   return row.reviewDecision === "confirmed";
+}
+
+function rowMatchesBusinessDate(row: ReviewableRow, businessDateFilter: string): boolean {
+  return (
+    businessDateFilter === ALL_OPTION ||
+    businessDateFromRaceId(row.raceId) === businessDateFilter
+  );
+}
+
+function rowMatchesVenue(row: ReviewableRow, venueFilter: string): boolean {
+  return venueFilter === ALL_OPTION || row.venue === venueFilter;
+}
+
+function compareRows(sortKey: SortKey): (left: ReviewableRow, right: ReviewableRow) => number {
+  return (left, right) => {
+    if (sortKey === "probability-desc") {
+      return (
+        compareNumberDesc(
+          displayPercentToNumber(left.modelProbability),
+          displayPercentToNumber(right.modelProbability),
+        ) ||
+        left.raceId.localeCompare(right.raceId)
+      );
+    }
+    if (sortKey === "expected-value-desc") {
+      return (
+        compareNumberDesc(
+          displayPercentToNumber(left.expectedValue),
+          displayPercentToNumber(right.expectedValue),
+        ) ||
+        left.raceId.localeCompare(right.raceId)
+      );
+    }
+    return (
+      left.raceId.localeCompare(right.raceId) ||
+      left.combination.localeCompare(right.combination)
+    );
+  };
+}
+
+function compareNumberDesc(left: number | null, right: number | null): number {
+  const normalizedLeft = left ?? Number.NEGATIVE_INFINITY;
+  const normalizedRight = right ?? Number.NEGATIVE_INFINITY;
+  return normalizedRight - normalizedLeft;
+}
+
+function displayPercentToNumber(value: string): number | null {
+  if (!value.endsWith("%")) {
+    return null;
+  }
+  const parsed = Number(value.replace("%", ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return Array.from(new Set(values)).sort((left, right) => left.localeCompare(right));
+}
+
+function businessDateFromRaceId(raceId: string): string {
+  const compactDate = raceId.split("-")[0] ?? "";
+  return compactDate.replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3");
 }
 
 function StatusItem({ label, value }: { label: string; value: string }) {
