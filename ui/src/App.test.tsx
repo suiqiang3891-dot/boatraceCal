@@ -2,6 +2,11 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 import type { BacktestReport } from "./reportMetrics";
 
+beforeEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+});
+
 test("App renders the first smart table workbench from the bundled sample report", () => {
   render(<App />);
 
@@ -89,4 +94,72 @@ test("App applies local review actions without changing the report contract", ()
   expect(screen.getByLabelText("当前模拟单位")).toHaveTextContent("1 单位");
   expect(screen.getByDisplayValue("positive_ev / sample")).toBeInTheDocument();
   expect(screen.getByText("审核 已确认 0 / PASS 0 / 待审 2")).toBeInTheDocument();
+});
+
+test("App persists review actions for the current report draft", () => {
+  const { unmount } = render(<App />);
+
+  fireEvent.click(screen.getByRole("button", { name: "增加模拟单位" }));
+  fireEvent.change(screen.getByLabelText("审核备注"), {
+    target: { value: "刷新后仍保留" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "确认候选" }));
+  unmount();
+
+  render(<App />);
+
+  expect(screen.getByText("审核 已确认 1 / PASS 0 / 待审 1")).toBeInTheDocument();
+  expect(screen.getByLabelText("当前模拟单位")).toHaveTextContent("2 单位");
+  expect(screen.getByDisplayValue("刷新后仍保留")).toBeInTheDocument();
+});
+
+test("App exports the reviewed smart table as an Excel compatible file", () => {
+  const createdUrls: string[] = [];
+  const createObjectUrl = vi.fn((blob: Blob) => {
+      expect(blob).toBeInstanceOf(Blob);
+      createdUrls.push("blob:review-export");
+      return "blob:review-export";
+    });
+  const revokeObjectUrl = vi.fn();
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectUrl,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeObjectUrl,
+  });
+
+  const clickedDownloads: Array<{ download: string; href: string }> = [];
+  const originalCreateElement = document.createElement.bind(document);
+  vi.spyOn(document, "createElement").mockImplementation((tagName, options) => {
+    const element = originalCreateElement(tagName, options);
+    if (tagName.toLowerCase() === "a") {
+      element.click = vi.fn(() => {
+        clickedDownloads.push({
+          download: (element as HTMLAnchorElement).download,
+          href: (element as HTMLAnchorElement).href,
+        });
+      });
+    }
+    return element;
+  });
+
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText("审核备注"), {
+    target: { value: "导出备注" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "确认候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "导出 Excel" }));
+
+  expect(createObjectUrl).toHaveBeenCalledTimes(1);
+  expect(revokeObjectUrl).toHaveBeenCalledWith("blob:review-export");
+  expect(createdUrls).toEqual(["blob:review-export"]);
+  expect(clickedDownloads).toEqual([
+    {
+      download: "boatrace-review-2025-01-02.csv",
+      href: "blob:review-export",
+    },
+  ]);
 });

@@ -31,6 +31,8 @@ const filters: Array<{ key: FilterKey; label: string }> = [
   { key: "confirmed", label: "已确认" },
 ];
 
+const REVIEW_STORAGE_PREFIX = "boatraceCal.reviewState";
+
 type ReviewDecision = "pending" | "confirmed" | "pass";
 
 type ReviewState = {
@@ -53,7 +55,13 @@ type ReviewableRow = SmartTableRow & {
 
 function App({ report = sampleReport as BacktestReport }: { report?: BacktestReport }) {
   const model = useMemo(() => buildDashboardModel(report), [report]);
-  const [reviewState, setReviewState] = useState<ReviewStateMap>({});
+  const reviewStorageKey = useMemo(
+    () => buildReviewStorageKey(model.smartTableRows, model.statusBar.businessDate),
+    [model.smartTableRows, model.statusBar.businessDate],
+  );
+  const [reviewState, setReviewState] = useState<ReviewStateMap>(() =>
+    loadReviewState(reviewStorageKey, model.smartTableRows),
+  );
   const [filter, setFilter] = useState<FilterKey>("all");
   const reviewRows = useMemo(
     () => model.smartTableRows.map((row) => applyReviewState(row, reviewState[row.id])),
@@ -79,10 +87,12 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
   ) => {
     setReviewState((current) => {
       const existing = current[row.id] ?? defaultReviewState(row);
-      return {
+      const next = {
         ...current,
         [row.id]: updater(existing),
       };
+      saveReviewState(reviewStorageKey, next);
+      return next;
     });
   };
 
@@ -109,8 +119,13 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
     setReviewState((current) => {
       const next = { ...current };
       delete next[row.id];
+      saveReviewState(reviewStorageKey, next);
       return next;
     });
+  };
+
+  const handleExport = () => {
+    exportReviewRows(reviewRows, model.statusBar.businessDate, model.riskNotice);
   };
 
   return (
@@ -134,7 +149,14 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
             <AlertTriangle size={16} aria-hidden="true" />
             风险警告
           </span>
-          <button className="icon-button" type="button" aria-label="导出 Excel" disabled>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="导出 Excel"
+            title="导出 Excel 兼容 CSV"
+            disabled={reviewRows.length === 0}
+            onClick={handleExport}
+          >
             <Download size={17} aria-hidden="true" />
           </button>
           <button className="icon-button" type="button" aria-label="确认明日清单" disabled>
@@ -499,7 +521,7 @@ function DetailPanel({
             <RotateCcw size={15} aria-hidden="true" />
           </button>
         </div>
-        <p className="inline-hint">审核修改仅保存在当前页面，接入 API 后再持久化。</p>
+        <p className="inline-hint">审核修改会自动保存到当前浏览器，接入 API 后再迁移为服务端持久化。</p>
       </section>
     </>
   );
@@ -551,6 +573,158 @@ function countReviewRows(rows: ReviewableRow[]): Record<ReviewDecision, number> 
     },
     { pending: 0, confirmed: 0, pass: 0 },
   );
+}
+
+function buildReviewStorageKey(rows: SmartTableRow[], businessDate: string): string {
+  const identity = rows
+    .map((row) =>
+      [
+        row.id,
+        row.raceId,
+        row.dataVersion,
+        row.featureVersion,
+        row.modelVersion,
+        row.strategyVersion,
+      ].join(":"),
+    )
+    .join("|");
+  return `${REVIEW_STORAGE_PREFIX}:${businessDate}:${hashString(identity)}`;
+}
+
+function loadReviewState(key: string, rows: SmartTableRow[]): ReviewStateMap {
+  try {
+    const rawValue = localStorage.getItem(key);
+    if (!rawValue) {
+      return {};
+    }
+    const parsed = JSON.parse(rawValue) as unknown;
+    const rowIds = new Set(rows.map((row) => row.id));
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    return Object.entries(parsed as Record<string, unknown>).reduce<ReviewStateMap>(
+      (state, [id, value]) => {
+        if (!rowIds.has(id) || !isReviewState(value)) {
+          return state;
+        }
+        state[id] = value;
+        return state;
+      },
+      {},
+    );
+  } catch {
+    return {};
+  }
+}
+
+function saveReviewState(key: string, state: ReviewStateMap): void {
+  try {
+    if (Object.keys(state).length === 0) {
+      localStorage.removeItem(key);
+      return;
+    }
+    localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // Browser storage can be disabled; the UI remains usable without persistence.
+  }
+}
+
+function isReviewState(value: unknown): value is ReviewState {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as ReviewState;
+  return (
+    (candidate.decision === "pending" ||
+      candidate.decision === "confirmed" ||
+      candidate.decision === "pass") &&
+    Number.isInteger(candidate.stakeUnits) &&
+    candidate.stakeUnits >= 0 &&
+    typeof candidate.notes === "string"
+  );
+}
+
+function hashString(value: string): string {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+function exportReviewRows(
+  rows: ReviewableRow[],
+  businessDate: string,
+  riskNotice: string,
+): void {
+  const headers = [
+    "业务日期",
+    "推荐ID",
+    "比赛ID",
+    "场地",
+    "场次",
+    "开赛时间",
+    "组合",
+    "模型概率",
+    "市场赔率",
+    "隐含概率",
+    "EV",
+    "保守EV",
+    "置信度",
+    "模拟单位",
+    "当前决策",
+    "审核状态",
+    "备注",
+    "数据版本",
+    "特征版本",
+    "模型版本",
+    "策略版本",
+    "风险声明",
+  ];
+  const records = rows.map((row) => [
+    businessDate,
+    row.id,
+    row.raceId,
+    row.venue,
+    row.raceNo,
+    row.startTime,
+    row.combination,
+    row.modelProbability,
+    row.marketOdds,
+    row.impliedProbability,
+    row.expectedValue,
+    row.conservativeExpectedValue,
+    row.confidenceLabel,
+    row.displayStakeUnits,
+    row.displayDecisionLabel,
+    row.displayReviewStatus,
+    row.displayNotes,
+    row.dataVersion,
+    row.featureVersion,
+    row.modelVersion,
+    row.strategyVersion,
+    riskNotice,
+  ]);
+  const csv = [headers, ...records].map(formatCsvRow).join("\r\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `boatrace-review-${safeFilePart(businessDate)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function formatCsvRow(values: string[]): string {
+  return values.map(formatCsvCell).join(",");
+}
+
+function formatCsvCell(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function safeFilePart(value: string): string {
+  return value.replace(/[^\dA-Za-z-]+/g, "-").replace(/^-+|-+$/g, "") || "draft";
 }
 
 export default App;
