@@ -3,6 +3,7 @@ import App from "./App";
 import type { BacktestReport } from "./reportMetrics";
 
 beforeEach(() => {
+  vi.unstubAllGlobals();
   localStorage.clear();
   vi.restoreAllMocks();
 });
@@ -162,4 +163,62 @@ test("App exports the reviewed smart table as an Excel compatible file", () => {
       href: "blob:review-export",
     },
   ]);
+});
+
+test("App exports only confirmed rows as the tomorrow checklist", async () => {
+  const exportedBlobs: Blob[] = [];
+  const exportedParts: BlobPart[][] = [];
+  const OriginalBlob = Blob;
+  class CapturingBlob extends OriginalBlob {
+    constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+      exportedParts.push(parts ?? []);
+      super(parts, options);
+    }
+  }
+  vi.stubGlobal("Blob", CapturingBlob);
+  const createObjectUrl = vi.fn((blob: Blob) => {
+    exportedBlobs.push(blob);
+    return "blob:tomorrow-list";
+  });
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectUrl,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: vi.fn(),
+  });
+
+  const clickedDownloads: Array<{ download: string; href: string }> = [];
+  const originalCreateElement = document.createElement.bind(document);
+  vi.spyOn(document, "createElement").mockImplementation((tagName, options) => {
+    const element = originalCreateElement(tagName, options);
+    if (tagName.toLowerCase() === "a") {
+      element.click = vi.fn(() => {
+        clickedDownloads.push({
+          download: (element as HTMLAnchorElement).download,
+          href: (element as HTMLAnchorElement).href,
+        });
+      });
+    }
+    return element;
+  });
+
+  render(<App />);
+
+  expect(screen.getByRole("button", { name: "确认明日清单" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "确认候选" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认明日清单" }));
+
+  expect(clickedDownloads).toEqual([
+    {
+      download: "boatrace-confirmed-2025-01-02.csv",
+      href: "blob:tomorrow-list",
+    },
+  ]);
+  expect(exportedBlobs).toHaveLength(1);
+  const exportedText = exportedParts[0].join("");
+  expect(exportedText).toContain("sample-rec-hit");
+  expect(exportedText).not.toContain("sample-rec-miss");
+  expect(exportedText).toContain("历史表现不代表未来结果");
 });

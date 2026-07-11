@@ -80,6 +80,13 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
     [filteredRows, reviewRows, selectedRowId],
   );
   const reviewCounts = useMemo(() => countReviewRows(reviewRows), [reviewRows]);
+  const confirmedRows = useMemo(
+    () =>
+      reviewRows.filter(
+        (row) => row.reviewDecision === "confirmed" && Number(row.displayStakeUnits) > 0,
+      ),
+    [reviewRows],
+  );
 
   const updateReview = (
     row: SmartTableRow,
@@ -128,6 +135,10 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
     exportReviewRows(reviewRows, model.statusBar.businessDate, model.riskNotice);
   };
 
+  const handleConfirmTomorrowList = () => {
+    exportConfirmedRows(confirmedRows, model.statusBar.businessDate, model.riskNotice);
+  };
+
   return (
     <main className="app-shell">
       <header className="top-bar">
@@ -159,7 +170,14 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
           >
             <Download size={17} aria-hidden="true" />
           </button>
-          <button className="icon-button" type="button" aria-label="确认明日清单" disabled>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="确认明日清单"
+            title="导出已确认候选清单"
+            disabled={confirmedRows.length === 0}
+            onClick={handleConfirmTomorrowList}
+          >
             <FileCheck2 size={17} aria-hidden="true" />
           </button>
         </div>
@@ -706,11 +724,54 @@ function exportReviewRows(
     riskNotice,
   ]);
   const csv = [headers, ...records].map(formatCsvRow).join("\r\n");
+  triggerCsvDownload(csv, `boatrace-review-${safeFilePart(businessDate)}.csv`);
+}
+
+function exportConfirmedRows(
+  rows: ReviewableRow[],
+  businessDate: string,
+  riskNotice: string,
+): void {
+  const headers = [
+    "业务日期",
+    "推荐ID",
+    "比赛ID",
+    "场地",
+    "场次",
+    "组合",
+    "模拟单位",
+    "审核状态",
+    "备注",
+    "模型概率",
+    "市场赔率",
+    "EV",
+    "风险声明",
+  ];
+  const records = rows.map((row) => [
+    businessDate,
+    row.id,
+    row.raceId,
+    row.venue,
+    row.raceNo,
+    row.combination,
+    row.displayStakeUnits,
+    row.displayReviewStatus,
+    row.displayNotes,
+    row.modelProbability,
+    row.marketOdds,
+    row.expectedValue,
+    riskNotice,
+  ]);
+  const csv = [headers, ...records].map(formatCsvRow).join("\r\n");
+  triggerCsvDownload(csv, `boatrace-confirmed-${safeFilePart(businessDate)}.csv`);
+}
+
+function triggerCsvDownload(csv: string, filename: string): void {
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `boatrace-review-${safeFilePart(businessDate)}.csv`;
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
 }
