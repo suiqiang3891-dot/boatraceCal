@@ -18,7 +18,10 @@ from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
 from boatrace_cal.review_archive import freeze_confirmed_review_list
-from boatrace_cal.review_excel import export_confirmed_review_list_xlsx
+from boatrace_cal.review_excel import (
+    export_confirmed_review_list_xlsx,
+    export_review_table_xlsx,
+)
 from boatrace_cal.review_store import FileReviewStore
 from boatrace_cal.reviews import (
     build_confirmed_review_list,
@@ -52,6 +55,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_confirmed_review_archive(args)
     if args.command == "confirmed-review-excel":
         return _run_confirmed_review_excel(args)
+    if args.command == "review-table-excel":
+        return _run_review_table_excel(args)
     if args.command == "openapi-spec":
         return _run_openapi_spec(args)
     parser.print_help()
@@ -142,6 +147,16 @@ def _build_parser() -> argparse.ArgumentParser:
     review_excel.add_argument("--generated-at", required=True)
     review_excel.add_argument("--generated-by", required=True)
     review_excel.add_argument("--output", required=True, type=Path)
+
+    review_table_excel = subparsers.add_parser(
+        "review-table-excel",
+        help="Export all review store entries as an XLSX audit table.",
+    )
+    review_table_excel.add_argument("--store", required=True, type=Path)
+    review_table_excel.add_argument("--business-date", required=True)
+    review_table_excel.add_argument("--generated-at", required=True)
+    review_table_excel.add_argument("--generated-by", required=True)
+    review_table_excel.add_argument("--output", required=True, type=Path)
 
     openapi = subparsers.add_parser(
         "openapi-spec",
@@ -258,6 +273,18 @@ def _run_confirmed_review_excel(args: argparse.Namespace) -> int:
         generated_by=args.generated_by,
     )
     export_confirmed_review_list_xlsx(review_list, args.output)
+    return 0
+
+
+def _run_review_table_excel(args: argparse.Namespace) -> int:
+    generated_at = _parse_datetime(args.generated_at, "generated-at")
+    export_review_table_xlsx(
+        FileReviewStore(args.store).list_reviews(),
+        args.output,
+        business_date=args.business_date,
+        generated_at=generated_at.isoformat(),
+        generated_by=args.generated_by,
+    )
     return 0
 
 
