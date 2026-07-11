@@ -421,6 +421,19 @@ def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path
     ]
 
 
+def test_openapi_spec_command_writes_contract(tmp_path: Path) -> None:
+    output_path = tmp_path / "api" / "openapi.json"
+
+    exit_code = main(("openapi-spec", "--output", str(output_path)))
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["openapi"] == "3.1.0"
+    assert "/reviews/import" in payload["paths"]
+    assert "/reviews/archives" in payload["paths"]
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_pyproject_exposes_console_script() -> None:
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 

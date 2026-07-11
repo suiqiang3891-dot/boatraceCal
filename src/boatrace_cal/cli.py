@@ -8,6 +8,7 @@ from datetime import date, datetime
 import json
 from pathlib import Path
 
+from boatrace_cal.api_contract import export_openapi_spec_json
 from boatrace_cal.backtest.export import export_backtest_report_json
 from boatrace_cal.backtest.runner import run_backtest
 from boatrace_cal.domain.bets import BetType
@@ -41,6 +42,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_review_store_import(args)
     if args.command == "confirmed-review-archive":
         return _run_confirmed_review_archive(args)
+    if args.command == "openapi-spec":
+        return _run_openapi_spec(args)
     parser.print_help()
     return 0
 
@@ -100,6 +103,12 @@ def _build_parser() -> argparse.ArgumentParser:
     archive.add_argument("--frozen-at", required=True)
     archive.add_argument("--frozen-by", required=True)
     archive.add_argument("--archive-dir", required=True, type=Path)
+
+    openapi = subparsers.add_parser(
+        "openapi-spec",
+        help="Write the OpenAPI contract JSON for the analysis API.",
+    )
+    openapi.add_argument("--output", required=True, type=Path)
     return parser
 
 
@@ -173,6 +182,11 @@ def _run_confirmed_review_archive(args: argparse.Namespace) -> int:
         frozen_at=_parse_datetime(args.frozen_at, "frozen-at"),
         frozen_by=args.frozen_by,
     )
+    return 0
+
+
+def _run_openapi_spec(args: argparse.Namespace) -> int:
+    export_openapi_spec_json(args.output)
     return 0
 
 
