@@ -284,6 +284,78 @@ def test_confirmed_review_list_command_writes_confirmed_reviews(tmp_path: Path) 
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_review_store_import_command_upserts_browser_review_export(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    import_path = tmp_path / "browser" / "reviews.json"
+    store_path.parent.mkdir(parents=True)
+    import_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-1",
+                    "race_id": "20250102-01-01",
+                    "decision": "pending",
+                    "stake_units": 1,
+                    "notes": "old",
+                    "reviewed_at": "2026-07-11T03:00:00+00:00",
+                    "reviewed_by": "analyst",
+                }
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    import_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-2",
+                    "race_id": "20250102-01-02",
+                    "decision": "pass",
+                    "stake_units": 0,
+                    "notes": "odds moved",
+                    "reviewed_at": "2026-07-11T03:30:00+00:00",
+                    "reviewed_by": "browser-analyst",
+                },
+                {
+                    "recommendation_id": "rec-1",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 3,
+                    "notes": "replace old",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "browser-analyst",
+                },
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "review-store-import",
+            "--store",
+            str(store_path),
+            "--reviews",
+            str(import_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(store_path.read_text(encoding="utf-8"))
+    assert [record["recommendation_id"] for record in payload] == ["rec-1", "rec-2"]
+    assert payload[0]["decision"] == "confirmed"
+    assert payload[0]["stake_units"] == 3
+    assert payload[0]["notes"] == "replace old"
+    assert payload[1]["decision"] == "pass"
+    assert payload[1]["stake_units"] == 0
+    assert store_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_pyproject_exposes_console_script() -> None:
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 

@@ -15,6 +15,7 @@ from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.review_store import FileReviewStore
 from boatrace_cal.reviews import (
     build_confirmed_review_list,
     confirmed_review_list_to_dict,
@@ -35,6 +36,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_historical_quality_report(args)
     if args.command == "confirmed-review-list":
         return _run_confirmed_review_list(args)
+    if args.command == "review-store-import":
+        return _run_review_store_import(args)
     parser.print_help()
     return 0
 
@@ -75,6 +78,13 @@ def _build_parser() -> argparse.ArgumentParser:
     confirmed.add_argument("--generated-at", required=True)
     confirmed.add_argument("--generated-by", required=True)
     confirmed.add_argument("--output", required=True, type=Path)
+
+    review_import = subparsers.add_parser(
+        "review-store-import",
+        help="Import review JSON records into a file-backed review store.",
+    )
+    review_import.add_argument("--store", required=True, type=Path)
+    review_import.add_argument("--reviews", required=True, type=Path)
     return parser
 
 
@@ -128,6 +138,11 @@ def _run_confirmed_review_list(args: argparse.Namespace) -> int:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return 0
+
+
+def _run_review_store_import(args: argparse.Namespace) -> int:
+    FileReviewStore(args.store).upsert_reviews(load_reviews_json(args.reviews))
     return 0
 
 
