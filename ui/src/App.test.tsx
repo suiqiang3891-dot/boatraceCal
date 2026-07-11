@@ -3,6 +3,7 @@ import App from "./App";
 import type { BacktestReport } from "./reportMetrics";
 
 beforeEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   localStorage.clear();
   vi.restoreAllMocks();
@@ -221,4 +222,80 @@ test("App exports only confirmed rows as the tomorrow checklist", async () => {
   expect(exportedText).toContain("sample-rec-hit");
   expect(exportedText).not.toContain("sample-rec-miss");
   expect(exportedText).toContain("历史表现不代表未来结果");
+});
+
+test("App exports backend compatible review JSON for server handoff", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-11T04:30:00.000Z"));
+  const exportedParts: BlobPart[][] = [];
+  const OriginalBlob = Blob;
+  class CapturingBlob extends OriginalBlob {
+    constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+      exportedParts.push(parts ?? []);
+      super(parts, options);
+    }
+  }
+  vi.stubGlobal("Blob", CapturingBlob);
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => "blob:review-json"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: vi.fn(),
+  });
+
+  const clickedDownloads: Array<{ download: string; href: string }> = [];
+  const originalCreateElement = document.createElement.bind(document);
+  vi.spyOn(document, "createElement").mockImplementation((tagName, options) => {
+    const element = originalCreateElement(tagName, options);
+    if (tagName.toLowerCase() === "a") {
+      element.click = vi.fn(() => {
+        clickedDownloads.push({
+          download: (element as HTMLAnchorElement).download,
+          href: (element as HTMLAnchorElement).href,
+        });
+      });
+    }
+    return element;
+  });
+
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText("审核备注"), {
+    target: { value: "server handoff" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "确认候选" }));
+  fireEvent.click(screen.getByRole("button", { name: /20250102-01-02/ }));
+  fireEvent.click(screen.getByRole("button", { name: "人工 PASS" }));
+  fireEvent.click(screen.getByRole("button", { name: "导出审核 JSON" }));
+
+  expect(clickedDownloads).toEqual([
+    {
+      download: "boatrace-reviews-2025-01-02.json",
+      href: "blob:review-json",
+    },
+  ]);
+  const exportedText = exportedParts[0].join("");
+  expect(JSON.parse(exportedText)).toEqual([
+    {
+      decision: "confirmed",
+      notes: "server handoff",
+      race_id: "20250102-01-01",
+      recommendation_id: "sample-rec-hit",
+      reviewed_at: "2026-07-11T04:30:00.000Z",
+      reviewed_by: "browser-analyst",
+      stake_units: 1,
+    },
+    {
+      decision: "pass",
+      notes: "positive_ev / sample",
+      race_id: "20250102-01-02",
+      recommendation_id: "sample-rec-miss",
+      reviewed_at: "2026-07-11T04:30:00.000Z",
+      reviewed_by: "browser-analyst",
+      stake_units: 0,
+    },
+  ]);
+  expect(exportedText).toMatch(/\n$/);
 });

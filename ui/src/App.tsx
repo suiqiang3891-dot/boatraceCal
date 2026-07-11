@@ -7,6 +7,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  Save,
   ShieldCheck,
   SlidersHorizontal,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const filters: Array<{ key: FilterKey; label: string }> = [
 ];
 
 const REVIEW_STORAGE_PREFIX = "boatraceCal.reviewState";
+const REVIEW_EXPORT_USER = "browser-analyst";
 
 type ReviewDecision = "pending" | "confirmed" | "pass";
 
@@ -42,6 +44,16 @@ type ReviewState = {
 };
 
 type ReviewStateMap = Record<string, ReviewState>;
+
+type ReviewJsonRecord = {
+  recommendation_id: string;
+  race_id: string;
+  decision: ReviewDecision;
+  stake_units: number;
+  notes: string;
+  reviewed_at: string;
+  reviewed_by: string;
+};
 
 type ReviewableRow = SmartTableRow & {
   reviewDecision: ReviewDecision;
@@ -135,6 +147,10 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
     exportReviewRows(reviewRows, model.statusBar.businessDate, model.riskNotice);
   };
 
+  const handleExportReviewJson = () => {
+    exportReviewJson(reviewRows, model.statusBar.businessDate);
+  };
+
   const handleConfirmTomorrowList = () => {
     exportConfirmedRows(confirmedRows, model.statusBar.businessDate, model.riskNotice);
   };
@@ -169,6 +185,16 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
             onClick={handleExport}
           >
             <Download size={17} aria-hidden="true" />
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="导出审核 JSON"
+            title="导出后端审核 JSON"
+            disabled={reviewRows.length === 0}
+            onClick={handleExportReviewJson}
+          >
+            <Save size={17} aria-hidden="true" />
           </button>
           <button
             className="icon-button"
@@ -727,6 +753,21 @@ function exportReviewRows(
   triggerCsvDownload(csv, `boatrace-review-${safeFilePart(businessDate)}.csv`);
 }
 
+function exportReviewJson(rows: ReviewableRow[], businessDate: string): void {
+  const reviewedAt = new Date().toISOString();
+  const records: ReviewJsonRecord[] = rows.map((row) => ({
+    recommendation_id: row.id,
+    race_id: row.raceId,
+    decision: row.reviewDecision,
+    stake_units: row.reviewDecision === "pass" ? 0 : Number(row.displayStakeUnits) || 0,
+    notes: row.displayNotes,
+    reviewed_at: reviewedAt,
+    reviewed_by: REVIEW_EXPORT_USER,
+  }));
+  const payload = `${JSON.stringify(records, null, 2)}\n`;
+  triggerJsonDownload(payload, `boatrace-reviews-${safeFilePart(businessDate)}.json`);
+}
+
 function exportConfirmedRows(
   rows: ReviewableRow[],
   businessDate: string,
@@ -768,6 +809,15 @@ function exportConfirmedRows(
 
 function triggerCsvDownload(csv: string, filename: string): void {
   const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  triggerBlobDownload(blob, filename);
+}
+
+function triggerJsonDownload(json: string, filename: string): void {
+  const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+  triggerBlobDownload(blob, filename);
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
