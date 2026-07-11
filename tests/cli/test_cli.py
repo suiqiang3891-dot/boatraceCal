@@ -219,6 +219,71 @@ def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_confirmed_review_list_command_writes_confirmed_reviews(tmp_path: Path) -> None:
+    reviews_path = tmp_path / "reviews.json"
+    output_path = tmp_path / "reviews" / "confirmed-list.json"
+    reviews_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-2",
+                    "race_id": "20250102-01-02",
+                    "decision": "confirmed",
+                    "stake_units": 1,
+                    "notes": "second",
+                    "reviewed_at": "2026-07-11T03:30:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+                {
+                    "recommendation_id": "rec-pass",
+                    "race_id": "20250102-01-03",
+                    "decision": "pass",
+                    "stake_units": 0,
+                    "notes": "odds moved",
+                    "reviewed_at": "2026-07-11T03:40:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+                {
+                    "recommendation_id": "rec-1",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 3,
+                    "notes": "first",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "confirmed-review-list",
+            "--reviews",
+            str(reviews_path),
+            "--business-date",
+            "2025-01-02",
+            "--generated-at",
+            "2026-07-11T04:00:00+00:00",
+            "--generated-by",
+            "analyst",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["business_date"] == "2025-01-02"
+    assert payload["total_stake_units"] == 4
+    assert [entry["recommendation_id"] for entry in payload["entries"]] == ["rec-1", "rec-2"]
+    assert "历史表现不代表未来结果" in payload["risk_notice"]
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_pyproject_exposes_console_script() -> None:
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 

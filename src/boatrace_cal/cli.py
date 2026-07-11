@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, datetime
 import json
 from pathlib import Path
 
@@ -15,6 +15,11 @@ from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.reviews import (
+    build_confirmed_review_list,
+    confirmed_review_list_to_dict,
+    load_reviews_json,
+)
 from boatrace_cal.validation.data_quality import build_historical_data_quality_report
 from boatrace_cal.validation.serialization import historical_data_quality_report_to_dict
 
@@ -28,6 +33,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_backtest_report(args)
     if args.command == "historical-quality-report":
         return _run_historical_quality_report(args)
+    if args.command == "confirmed-review-list":
+        return _run_confirmed_review_list(args)
     parser.print_help()
     return 0
 
@@ -58,6 +65,16 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_expected_race_arguments(backtest)
     backtest.add_argument("--bet-type", required=True, action="append")
     backtest.add_argument("--output", required=True, type=Path)
+
+    confirmed = subparsers.add_parser(
+        "confirmed-review-list",
+        help="Build a JSON checklist from analyst-confirmed recommendation reviews.",
+    )
+    confirmed.add_argument("--reviews", required=True, type=Path)
+    confirmed.add_argument("--business-date", required=True)
+    confirmed.add_argument("--generated-at", required=True)
+    confirmed.add_argument("--generated-by", required=True)
+    confirmed.add_argument("--output", required=True, type=Path)
     return parser
 
 
@@ -90,6 +107,23 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
     output_path: Path = args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = historical_data_quality_report_to_dict(report)
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return 0
+
+
+def _run_confirmed_review_list(args: argparse.Namespace) -> int:
+    review_list = build_confirmed_review_list(
+        reviews=load_reviews_json(args.reviews),
+        business_date=args.business_date,
+        generated_at=_parse_datetime(args.generated_at, "generated-at"),
+        generated_by=args.generated_by,
+    )
+    output_path: Path = args.output
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = confirmed_review_list_to_dict(review_list)
     output_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -143,6 +177,13 @@ def _parse_race_numbers(value: str) -> tuple[int, ...]:
         else:
             race_numbers.append(int(token))
     return tuple(race_numbers)
+
+
+def _parse_datetime(value: str, name: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"{name} must be timezone-aware")
+    return parsed
 
 
 def _race_id_sort_key(race_id: RaceId) -> tuple[date, str, int]:
