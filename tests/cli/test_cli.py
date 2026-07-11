@@ -356,6 +356,71 @@ def test_review_store_import_command_upserts_browser_review_export(tmp_path: Pat
     assert store_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    archive_dir = tmp_path / "archives"
+    store_path.parent.mkdir(parents=True)
+    store_path.write_text(
+        json.dumps(
+            [
+                {
+                    "recommendation_id": "rec-1",
+                    "race_id": "20250102-01-01",
+                    "decision": "confirmed",
+                    "stake_units": 3,
+                    "notes": "keep",
+                    "reviewed_at": "2026-07-11T03:20:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+                {
+                    "recommendation_id": "rec-pass",
+                    "race_id": "20250102-01-02",
+                    "decision": "pass",
+                    "stake_units": 0,
+                    "notes": "skip",
+                    "reviewed_at": "2026-07-11T03:30:00+00:00",
+                    "reviewed_by": "analyst",
+                },
+            ],
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "confirmed-review-archive",
+            "--store",
+            str(store_path),
+            "--business-date",
+            "2025-01-02",
+            "--generated-at",
+            "2026-07-11T04:00:00+00:00",
+            "--generated-by",
+            "analyst",
+            "--frozen-at",
+            "2026-07-11T04:10:00+00:00",
+            "--frozen-by",
+            "analyst",
+            "--archive-dir",
+            str(archive_dir),
+        )
+    )
+
+    assert exit_code == 0
+    archive_paths = list(archive_dir.glob("2025-01-02-*.json"))
+    assert len(archive_paths) == 1
+    payload = json.loads(archive_paths[0].read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "confirmed_review_list"
+    assert payload["schema_version"] == "confirmed-review-list-v1"
+    assert payload["frozen_by"] == "analyst"
+    assert payload["checklist"]["total_stake_units"] == 3
+    assert [entry["recommendation_id"] for entry in payload["checklist"]["entries"]] == [
+        "rec-1"
+    ]
+
+
 def test_pyproject_exposes_console_script() -> None:
     pyproject = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 

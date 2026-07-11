@@ -15,6 +15,7 @@ from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.review_archive import freeze_confirmed_review_list
 from boatrace_cal.review_store import FileReviewStore
 from boatrace_cal.reviews import (
     build_confirmed_review_list,
@@ -38,6 +39,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_confirmed_review_list(args)
     if args.command == "review-store-import":
         return _run_review_store_import(args)
+    if args.command == "confirmed-review-archive":
+        return _run_confirmed_review_archive(args)
     parser.print_help()
     return 0
 
@@ -85,6 +88,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     review_import.add_argument("--store", required=True, type=Path)
     review_import.add_argument("--reviews", required=True, type=Path)
+
+    archive = subparsers.add_parser(
+        "confirmed-review-archive",
+        help="Freeze confirmed review store entries as an immutable archive artifact.",
+    )
+    archive.add_argument("--store", required=True, type=Path)
+    archive.add_argument("--business-date", required=True)
+    archive.add_argument("--generated-at", required=True)
+    archive.add_argument("--generated-by", required=True)
+    archive.add_argument("--frozen-at", required=True)
+    archive.add_argument("--frozen-by", required=True)
+    archive.add_argument("--archive-dir", required=True, type=Path)
     return parser
 
 
@@ -143,6 +158,21 @@ def _run_confirmed_review_list(args: argparse.Namespace) -> int:
 
 def _run_review_store_import(args: argparse.Namespace) -> int:
     FileReviewStore(args.store).upsert_reviews(load_reviews_json(args.reviews))
+    return 0
+
+
+def _run_confirmed_review_archive(args: argparse.Namespace) -> int:
+    review_list = FileReviewStore(args.store).build_confirmed_review_list(
+        business_date=args.business_date,
+        generated_at=_parse_datetime(args.generated_at, "generated-at"),
+        generated_by=args.generated_by,
+    )
+    freeze_confirmed_review_list(
+        review_list,
+        archive_dir=args.archive_dir,
+        frozen_at=_parse_datetime(args.frozen_at, "frozen-at"),
+        frozen_by=args.frozen_by,
+    )
     return 0
 
 
