@@ -20,6 +20,7 @@ import {
   type SmartTableRow,
   type Tone,
 } from "./reportMetrics";
+import { createSingleSheetXlsx, type WorkbookRow } from "./xlsxExport";
 import "./styles.css";
 
 type FilterKey = "all" | "select" | "wait" | "pass" | "confirmed";
@@ -180,7 +181,7 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
             className="icon-button"
             type="button"
             aria-label="导出 Excel"
-            title="导出 Excel 兼容 CSV"
+            title="导出 XLSX"
             disabled={reviewRows.length === 0}
             onClick={handleExport}
           >
@@ -749,8 +750,11 @@ function exportReviewRows(
     row.strategyVersion,
     riskNotice,
   ]);
-  const csv = [headers, ...records].map(formatCsvRow).join("\r\n");
-  triggerCsvDownload(csv, `boatrace-review-${safeFilePart(businessDate)}.csv`);
+  const workbookRows: WorkbookRow[] = [headers, ...records];
+  triggerXlsxDownload(
+    createSingleSheetXlsx("review_table", workbookRows),
+    `boatrace-review-${safeFilePart(businessDate)}.xlsx`,
+  );
 }
 
 function exportReviewJson(rows: ReviewableRow[], businessDate: string): void {
@@ -803,12 +807,19 @@ function exportConfirmedRows(
     row.expectedValue,
     riskNotice,
   ]);
-  const csv = [headers, ...records].map(formatCsvRow).join("\r\n");
-  triggerCsvDownload(csv, `boatrace-confirmed-${safeFilePart(businessDate)}.csv`);
+  const workbookRows: WorkbookRow[] = [headers, ...records];
+  triggerXlsxDownload(
+    createSingleSheetXlsx("confirmed_reviews", workbookRows),
+    `boatrace-confirmed-${safeFilePart(businessDate)}.xlsx`,
+  );
 }
 
-function triggerCsvDownload(csv: string, filename: string): void {
-  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+function triggerXlsxDownload(workbook: Uint8Array, filename: string): void {
+  const workbookBuffer = new ArrayBuffer(workbook.byteLength);
+  new Uint8Array(workbookBuffer).set(workbook);
+  const blob = new Blob([workbookBuffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
   triggerBlobDownload(blob, filename);
 }
 
@@ -824,14 +835,6 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-function formatCsvRow(values: string[]): string {
-  return values.map(formatCsvCell).join(",");
-}
-
-function formatCsvCell(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
 }
 
 function safeFilePart(value: string): string {

@@ -9,6 +9,16 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
+function bytesFromBlobPart(part: BlobPart): Uint8Array {
+  if (part instanceof ArrayBuffer) {
+    return new Uint8Array(part);
+  }
+  if (ArrayBuffer.isView(part)) {
+    return new Uint8Array(part.buffer, part.byteOffset, part.byteLength);
+  }
+  throw new Error("expected binary workbook blob part");
+}
+
 test("App renders the first smart table workbench from the bundled sample report", () => {
   render(<App />);
 
@@ -115,8 +125,17 @@ test("App persists review actions for the current report draft", () => {
   expect(screen.getByDisplayValue("刷新后仍保留")).toBeInTheDocument();
 });
 
-test("App exports the reviewed smart table as an Excel compatible file", () => {
+test("App exports the reviewed smart table as an XLSX workbook", () => {
   const createdUrls: string[] = [];
+  const exportedParts: BlobPart[][] = [];
+  const OriginalBlob = Blob;
+  class CapturingBlob extends OriginalBlob {
+    constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+      exportedParts.push(parts ?? []);
+      super(parts, options);
+    }
+  }
+  vi.stubGlobal("Blob", CapturingBlob);
   const createObjectUrl = vi.fn((blob: Blob) => {
       expect(blob).toBeInstanceOf(Blob);
       createdUrls.push("blob:review-export");
@@ -160,10 +179,16 @@ test("App exports the reviewed smart table as an Excel compatible file", () => {
   expect(createdUrls).toEqual(["blob:review-export"]);
   expect(clickedDownloads).toEqual([
     {
-      download: "boatrace-review-2025-01-02.csv",
+      download: "boatrace-review-2025-01-02.xlsx",
       href: "blob:review-export",
     },
   ]);
+  const exportedWorkbook = bytesFromBlobPart(exportedParts[0][0]);
+  expect(
+    Array.from(exportedWorkbook.slice(0, 2))
+      .map((value) => String.fromCharCode(value))
+      .join(""),
+  ).toBe("PK");
 });
 
 test("App exports only confirmed rows as the tomorrow checklist", async () => {
@@ -213,12 +238,18 @@ test("App exports only confirmed rows as the tomorrow checklist", async () => {
 
   expect(clickedDownloads).toEqual([
     {
-      download: "boatrace-confirmed-2025-01-02.csv",
+      download: "boatrace-confirmed-2025-01-02.xlsx",
       href: "blob:tomorrow-list",
     },
   ]);
   expect(exportedBlobs).toHaveLength(1);
-  const exportedText = exportedParts[0].join("");
+  const exportedWorkbook = bytesFromBlobPart(exportedParts[0][0]);
+  expect(
+    Array.from(exportedWorkbook.slice(0, 2))
+      .map((value) => String.fromCharCode(value))
+      .join(""),
+  ).toBe("PK");
+  const exportedText = new TextDecoder().decode(exportedWorkbook);
   expect(exportedText).toContain("sample-rec-hit");
   expect(exportedText).not.toContain("sample-rec-miss");
   expect(exportedText).toContain("历史表现不代表未来结果");
