@@ -10,8 +10,9 @@ import {
   Save,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ChangeEvent } from "react";
 import sampleReport from "../../examples/sample_backtest/report.json";
 import { EquityChart } from "./EquityChart";
 import {
@@ -67,7 +68,9 @@ type ReviewableRow = SmartTableRow & {
 };
 
 function App({ report = sampleReport as BacktestReport }: { report?: BacktestReport }) {
-  const model = useMemo(() => buildDashboardModel(report), [report]);
+  const [activeReport, setActiveReport] = useState(report);
+  const [reportLoadError, setReportLoadError] = useState("");
+  const model = useMemo(() => buildDashboardModel(activeReport), [activeReport]);
   const reviewStorageKey = useMemo(
     () => buildReviewStorageKey(model.smartTableRows, model.statusBar.businessDate),
     [model.smartTableRows, model.statusBar.businessDate],
@@ -100,6 +103,31 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
       ),
     [reviewRows],
   );
+
+  const handleReportImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      const importedReport = JSON.parse(await readFileText(file)) as BacktestReport;
+      const nextModel = buildDashboardModel(importedReport);
+      const nextStorageKey = buildReviewStorageKey(
+        nextModel.smartTableRows,
+        nextModel.statusBar.businessDate,
+      );
+      setActiveReport(importedReport);
+      setFilter("all");
+      setSelectedRowId(nextModel.smartTableRows[0]?.id ?? "");
+      setReviewState(loadReviewState(nextStorageKey, nextModel.smartTableRows));
+      setReportLoadError("");
+    } catch {
+      setReportLoadError("报告 JSON 解析失败，已保留当前报告。");
+    } finally {
+      input.value = "";
+    }
+  };
 
   const updateReview = (
     row: SmartTableRow,
@@ -177,6 +205,16 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
             <AlertTriangle size={16} aria-hidden="true" />
             风险警告
           </span>
+          <label className="icon-button file-import-button" title="导入回测报告 JSON">
+            <Upload size={17} aria-hidden="true" />
+            <input
+              className="file-input"
+              type="file"
+              accept="application/json,.json"
+              aria-label="导入回测报告 JSON"
+              onChange={handleReportImport}
+            />
+          </label>
           <button
             className="icon-button"
             type="button"
@@ -214,6 +252,12 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
         <ShieldCheck size={16} aria-hidden="true" />
         <span>{model.riskNotice}</span>
       </section>
+
+      {reportLoadError ? (
+        <section className="error-strip" role="alert">
+          {reportLoadError}
+        </section>
+      ) : null}
 
       <section className="summary-strip" aria-label="核心指标">
         {model.summaryCards.map((card) => (
@@ -838,6 +882,18 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
 
 function safeFilePart(value: string): string {
   return value.replace(/[^\dA-Za-z-]+/g, "-").replace(/^-+|-+$/g, "") || "draft";
+}
+
+function readFileText(file: File): Promise<string> {
+  if (typeof file.text === "function") {
+    return file.text();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "");
+    reader.onerror = () => reject(reader.error ?? new Error("failed to read report file"));
+    reader.readAsText(file);
+  });
 }
 
 export default App;

@@ -71,6 +71,86 @@ test("App renders blocked reports without crashing", () => {
   expect(screen.getByText(/等待数据质量检查/)).toBeInTheDocument();
 });
 
+test("App imports a local backtest report JSON into the workbench", async () => {
+  const importedReport: BacktestReport = {
+    readiness: {
+      status: "ready",
+      ready: true,
+    },
+    summary: {
+      expected_race_count: 1,
+      selected_bet_count: 1,
+      selected_race_count: 1,
+      hit_count: 0,
+      miss_count: 1,
+      net_profit_yen: "-100",
+      return_rate: "0",
+      hit_rate: "0",
+      total_stake_yen: "100",
+      total_returned_yen: "0",
+    },
+    equity_curve: {
+      final_equity_yen: "-100",
+      max_drawdown_yen: "100",
+      points: [
+        {
+          race_id: "20250103-02-01",
+          equity_yen: "-100",
+          drawdown_yen: "100",
+        },
+      ],
+    },
+    slices: [],
+    settlements: [
+      {
+        recommendation_id: "imported-rec",
+        race_id: "20250103-02-01",
+        stake_units: 1,
+        stake_yen: "100",
+        returned_yen: "0",
+        net_profit_yen: "-100",
+        recommendation: {
+          stage: "final",
+          decision: "select",
+          confidence: "low",
+          probability: "0.11",
+          odds: "8.4",
+          expected_value: "-0.08",
+          as_of: "2025-01-03T09:45:00+00:00",
+          stake_units: 1,
+          versions: {
+            data: "imported-data-v1",
+            feature: "imported-feature-v1",
+            model: "imported-model-v1",
+            strategy: "imported-strategy-v1",
+          },
+          reason_codes: ["imported_fixture"],
+        },
+        settlement: {
+          status: "miss",
+          combination: {
+            bet_type: "trifecta_ordered",
+            lanes: [3, 1, 2],
+          },
+        },
+      },
+    ],
+  };
+  const file = new File([JSON.stringify(importedReport)], "report.json", {
+    type: "application/json",
+  });
+
+  render(<App />);
+
+  fireEvent.change(screen.getByLabelText("导入回测报告 JSON"), {
+    target: { files: [file] },
+  });
+
+  expect(await screen.findByText("2025-01-03")).toBeInTheDocument();
+  expect(screen.getByText("imported-data-v1")).toBeInTheDocument();
+  expect(screen.getAllByText(/imported_fixture/).length).toBeGreaterThan(0);
+});
+
 test("App filters the smart table rows by decision state", () => {
   render(<App />);
 

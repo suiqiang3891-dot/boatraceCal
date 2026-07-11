@@ -159,6 +159,21 @@ dd {
   background: #ffffff;
 }
 
+.file-import-button {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.file-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .risk-strip {
   display: flex;
   align-items: center;
@@ -172,6 +187,18 @@ dd {
   background: #f8fafc;
   font-size: 0.82rem;
   font-weight: 650;
+}
+
+.error-strip {
+  min-height: 34px;
+  margin: -2px 0 10px;
+  border: 1px solid #efaaa8;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #991b1b;
+  background: #fff1f2;
+  font-size: 0.82rem;
+  font-weight: 750;
 }
 
 .summary-strip {
