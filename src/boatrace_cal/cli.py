@@ -43,6 +43,7 @@ from boatrace_cal.strategies.csv import (
     export_strategy_candidates_csv,
     load_strategy_candidates_csv,
 )
+from boatrace_cal.strategies.risk_budget import RiskBudgetConfig, apply_risk_budget
 from boatrace_cal.strategies.value import (
     StrategyCandidate,
     ValueStrategyConfig,
@@ -172,6 +173,8 @@ def _build_parser() -> argparse.ArgumentParser:
     value_strategy.add_argument("--conservative-margin", default="0.05")
     value_strategy.add_argument("--min-conservative-expected-value", default="0")
     value_strategy.add_argument("--max-odds")
+    value_strategy.add_argument("--max-selects-per-race", type=int)
+    value_strategy.add_argument("--max-daily-stake-units", type=int)
     value_strategy.add_argument("--output", required=True, type=Path)
 
     attach_odds = subparsers.add_parser(
@@ -458,9 +461,15 @@ def _run_value_strategy_recommendations(args: argparse.Namespace) -> int:
         if args.max_odds is None
         else _parse_decimal_argument(args.max_odds, "max-odds"),
     )
-    recommendations = tuple(
-        build_value_recommendation(candidate, config)
-        for candidate in load_strategy_candidates_csv(args.candidates)
+    recommendations = apply_risk_budget(
+        (
+            build_value_recommendation(candidate, config)
+            for candidate in load_strategy_candidates_csv(args.candidates)
+        ),
+        RiskBudgetConfig(
+            max_selects_per_race=args.max_selects_per_race,
+            max_daily_stake_units=args.max_daily_stake_units,
+        ),
     )
     export_recommendations_csv(recommendations, args.output)
     return 0

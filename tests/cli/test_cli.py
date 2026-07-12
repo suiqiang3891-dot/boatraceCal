@@ -342,6 +342,62 @@ def test_value_strategy_recommendations_command_writes_backtest_ready_csv(
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_value_strategy_recommendations_command_applies_risk_budget_caps(
+    tmp_path: Path,
+) -> None:
+    candidates_path = tmp_path / "strategy" / "candidates.csv"
+    output_path = tmp_path / "strategy" / "recommendations.csv"
+    candidates_path.parent.mkdir(parents=True)
+    candidates_path.write_text(
+        "\n".join(
+            (
+                "recommendation_id,race_date,venue,race_no,bet_type,combination,"
+                "confidence,probability,odds,as_of,data_version,feature_version,"
+                "model_version,strategy_version,reason_codes",
+                "low-ev,2025-01-02,01,1,trifecta_ordered,1-2-3,high,"
+                "0.25,5.2,2025-01-02T10:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,model_signal",
+                "high-ev,2025-01-02,01,1,trifecta_ordered,1-3-2,high,"
+                "0.30,6.0,2025-01-02T10:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,model_signal",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "value-strategy-recommendations",
+            "--candidates",
+            str(candidates_path),
+            "--min-expected-value",
+            "0.10",
+            "--conservative-margin",
+            "0.05",
+            "--max-selects-per-race",
+            "1",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    recommendations = load_recommendations_csv(output_path)
+    assert [record.recommendation_id for record in recommendations] == [
+        "low-ev",
+        "high-ev",
+    ]
+    assert recommendations[0].decision is Decision.PASS
+    assert recommendations[0].reason_codes == (
+        "model_signal",
+        "positive_ev",
+        "conservative_ev_ok",
+        "race_risk_limit",
+    )
+    assert recommendations[1].decision is Decision.SELECT
+
+
 def test_frequency_model_candidates_command_writes_strategy_candidate_csv(
     tmp_path: Path,
 ) -> None:
