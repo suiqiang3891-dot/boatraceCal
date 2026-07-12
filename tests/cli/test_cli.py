@@ -531,6 +531,79 @@ def test_market_implied_candidates_command_writes_strategy_candidate_csv(
     assert candidates[1].odds == Decimal("4")
 
 
+def test_probability_report_command_writes_model_quality_metrics(tmp_path: Path) -> None:
+    candidates_path = tmp_path / "models" / "candidates.csv"
+    results_path = tmp_path / "models" / "results.csv"
+    output_path = tmp_path / "reports" / "probability.json"
+    candidates_path.parent.mkdir(parents=True)
+    candidates_path.write_text(
+        "\n".join(
+            (
+                "recommendation_id,race_date,venue,race_no,bet_type,combination,"
+                "confidence,probability,odds,as_of,data_version,feature_version,"
+                "model_version,strategy_version,reason_codes",
+                "race-1-hit,2026-06-23,05,1,trifecta_ordered,1-2-3,medium,"
+                "0.8,,2026-06-23T04:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,test",
+                "race-1-miss,2026-06-23,05,1,trifecta_ordered,1-3-2,medium,"
+                "0.2,,2026-06-23T04:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,test",
+                "race-2-miss,2026-06-23,05,2,trifecta_ordered,1-2-3,medium,"
+                "0.7,,2026-06-23T04:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,test",
+                "race-2-hit,2026-06-23,05,2,trifecta_ordered,2-1-3,medium,"
+                "0.3,,2026-06-23T04:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,test",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    results_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,first,second,third,source,source_hash,"
+                "observed_at,available_at,parser_version",
+                "2026-06-23,05,1,1,2,3,official-results,result-hash-1,"
+                "2026-06-23T08:00:00+00:00,2026-06-23T08:01:00+00:00,results-v1",
+                "2026-06-23,05,2,2,1,3,official-results,result-hash-2,"
+                "2026-06-23T08:00:00+00:00,2026-06-23T08:01:00+00:00,results-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "probability-report",
+            "--candidates",
+            str(candidates_path),
+            "--results",
+            str(results_path),
+            "--bet-type",
+            "trifecta_ordered",
+            "--ece-bins",
+            "2",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload == {
+        "average_brier_score": "0.53",
+        "average_log_loss": "0.713558177820072874194520654",
+        "bet_type": "trifecta_ordered",
+        "candidate_count": 4,
+        "ece_bins": 2,
+        "evaluated_race_count": 2,
+        "expected_calibration_error": "0.25",
+        "top1_accuracy": "0.5",
+    }
+
+
 def test_attach_odds_to_candidates_command_writes_latest_available_odds(
     tmp_path: Path,
 ) -> None:

@@ -26,6 +26,10 @@ from boatrace_cal.ingestion.odds import (
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.models.evaluation import (
+    evaluate_probability_candidates,
+    probability_evaluation_report_to_dict,
+)
 from boatrace_cal.models.market_implied import build_market_implied_model
 from boatrace_cal.models.trifecta_frequency import fit_trifecta_frequency_model
 from boatrace_cal.review_archive import freeze_confirmed_review_list
@@ -79,6 +83,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_frequency_model_candidates(args)
     if args.command == "market-implied-candidates":
         return _run_market_implied_candidates(args)
+    if args.command == "probability-report":
+        return _run_probability_report(args)
     if args.command == "attach-odds-to-candidates":
         return _run_attach_odds_to_candidates(args)
     if args.command == "value-strategy-recommendations":
@@ -182,6 +188,16 @@ def _build_parser() -> argparse.ArgumentParser:
     market_implied.add_argument("--model-version", required=True)
     market_implied.add_argument("--strategy-version", required=True)
     market_implied.add_argument("--output", required=True, type=Path)
+
+    probability_report = subparsers.add_parser(
+        "probability-report",
+        help="Evaluate candidate probabilities against official results.",
+    )
+    probability_report.add_argument("--candidates", required=True, type=Path)
+    probability_report.add_argument("--results", required=True, type=Path)
+    probability_report.add_argument("--bet-type", required=True)
+    probability_report.add_argument("--ece-bins", default=10, type=int)
+    probability_report.add_argument("--output", required=True, type=Path)
 
     value_strategy = subparsers.add_parser(
         "value-strategy-recommendations",
@@ -501,6 +517,17 @@ def _run_market_implied_candidates(args: argparse.Namespace) -> int:
         for item in model.probabilities
     )
     export_strategy_candidates_csv(candidates, args.output)
+    return 0
+
+
+def _run_probability_report(args: argparse.Namespace) -> int:
+    report = evaluate_probability_candidates(
+        candidates=load_strategy_candidates_csv(args.candidates),
+        results=load_results_csv(args.results),
+        bet_type=BetType(args.bet_type),
+        ece_bins=args.ece_bins,
+    )
+    _write_json(args.output, probability_evaluation_report_to_dict(report))
     return 0
 
 
