@@ -183,6 +183,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     attach_odds.add_argument("--candidates", required=True, type=Path)
     attach_odds.add_argument("--odds", required=True, type=Path)
+    attach_odds.add_argument("--max-age-minutes", type=int)
     attach_odds.add_argument("--output", required=True, type=Path)
 
     candidate_status = subparsers.add_parser(
@@ -477,8 +478,13 @@ def _run_value_strategy_recommendations(args: argparse.Namespace) -> int:
 
 def _run_attach_odds_to_candidates(args: argparse.Namespace) -> int:
     odds_records = load_odds_csv(args.odds)
+    max_age = (
+        None
+        if args.max_age_minutes is None
+        else timedelta(minutes=args.max_age_minutes)
+    )
     candidates = tuple(
-        _candidate_with_latest_odds(candidate, odds_records)
+        _candidate_with_latest_odds(candidate, odds_records, max_age)
         for candidate in load_strategy_candidates_csv(args.candidates)
     )
     export_strategy_candidates_csv(candidates, args.output)
@@ -488,6 +494,7 @@ def _run_attach_odds_to_candidates(args: argparse.Namespace) -> int:
 def _candidate_with_latest_odds(
     candidate: StrategyCandidate,
     odds_records: tuple[OddsSnapshotRecord, ...],
+    max_age: timedelta | None,
 ) -> StrategyCandidate:
     latest = latest_odds_by_combination(
         records=odds_records,
@@ -497,17 +504,36 @@ def _candidate_with_latest_odds(
     odds_record = latest.get(candidate.combination)
     if odds_record is None:
         return candidate
+    if max_age is not None and candidate.as_of - odds_record.available_at > max_age:
+        return _candidate_with_replaced_odds(
+            candidate,
+            odds=None,
+            reason_code="odds_snapshot_stale",
+        )
 
+    return _candidate_with_replaced_odds(
+        candidate,
+        odds=odds_record.odds,
+        reason_code="odds_snapshot_attached",
+    )
+
+
+def _candidate_with_replaced_odds(
+    candidate: StrategyCandidate,
+    *,
+    odds: Decimal | None,
+    reason_code: str,
+) -> StrategyCandidate:
     return StrategyCandidate(
         recommendation_id=candidate.recommendation_id,
         race_id=candidate.race_id,
         combination=candidate.combination,
         probability=candidate.probability,
-        odds=odds_record.odds,
+        odds=odds,
         confidence=candidate.confidence,
         as_of=candidate.as_of,
         versions=candidate.versions,
-        reason_codes=_append_reason_once(candidate.reason_codes, "odds_snapshot_attached"),
+        reason_codes=_append_reason_once(candidate.reason_codes, reason_code),
     )
 
 

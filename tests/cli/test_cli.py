@@ -532,6 +532,64 @@ def test_attach_odds_to_candidates_command_writes_latest_available_odds(
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_attach_odds_to_candidates_command_marks_stale_odds_unavailable(
+    tmp_path: Path,
+) -> None:
+    candidates_path = tmp_path / "strategy" / "candidates.csv"
+    odds_path = tmp_path / "market" / "odds.csv"
+    output_path = tmp_path / "strategy" / "candidates-with-odds.csv"
+    candidates_path.parent.mkdir(parents=True)
+    odds_path.parent.mkdir(parents=True)
+    candidates_path.write_text(
+        "\n".join(
+            (
+                "recommendation_id,race_date,venue,race_no,bet_type,combination,"
+                "confidence,probability,odds,as_of,data_version,feature_version,"
+                "model_version,strategy_version,reason_codes",
+                "freq-rec-stale,2026-06-23,05,1,trifecta_ordered,3-1-2,medium,"
+                "0.25,5.2,2026-06-23T04:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,frequency_baseline",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    odds_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,bet_type,combination,odds,"
+                "source,source_hash,observed_at,available_at,parser_version",
+                "2026-06-23,05,1,trifecta_ordered,3-1-2,7.0,official-odds,hash-stale,"
+                "2026-06-23T03:39:00+00:00,2026-06-23T03:40:00+00:00,odds-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "attach-odds-to-candidates",
+            "--candidates",
+            str(candidates_path),
+            "--odds",
+            str(odds_path),
+            "--max-age-minutes",
+            "10",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    candidates = load_strategy_candidates_csv(output_path)
+    assert candidates[0].odds is None
+    assert candidates[0].reason_codes == (
+        "frequency_baseline",
+        "odds_snapshot_stale",
+    )
+
+
 def test_candidate_status_command_writes_business_date_status(tmp_path: Path) -> None:
     output_path = tmp_path / "api" / "status.json"
 
