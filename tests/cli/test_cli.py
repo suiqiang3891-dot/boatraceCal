@@ -151,6 +151,64 @@ def test_historical_quality_report_command_accepts_expected_race_range(
     ]
 
 
+def test_odds_quality_report_command_writes_snapshot_coverage_report(
+    tmp_path: Path,
+) -> None:
+    odds_path = tmp_path / "market" / "odds.csv"
+    output_path = tmp_path / "reports" / "odds-quality.json"
+    odds_path.parent.mkdir(parents=True)
+    odds_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,bet_type,combination,odds,"
+                "source,source_hash,observed_at,available_at,parser_version",
+                "2026-06-23,05,1,exacta_ordered,1-2,5.2,official-odds,hash-good,"
+                "2026-06-23T03:54:00+00:00,2026-06-23T03:55:00+00:00,odds-v1",
+                "2026-06-23,05,1,exacta_ordered,2-1,7.0,official-odds,hash-stale,"
+                "2026-06-23T03:39:00+00:00,2026-06-23T03:40:00+00:00,odds-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "odds-quality-report",
+            "--odds",
+            str(odds_path),
+            "--expected-race",
+            "2026-06-23:05:1",
+            "--bet-type",
+            "exacta_ordered",
+            "--prediction-as-of",
+            "2026-06-23T04:00:00+00:00",
+            "--max-age-minutes",
+            "10",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["expected_snapshot_count"] == 30
+    assert payload["available_snapshot_count"] == 2
+    assert payload["stale_snapshot_count"] == 1
+    assert payload["issue_count"] == 29
+    assert payload["coverage"] == [
+        {
+            "race_id": "20260623-05-01",
+            "bet_type": "exacta_ordered",
+            "expected_combination_count": 30,
+            "available_combination_count": 2,
+            "stale_combination_count": 1,
+            "future_only_combination_count": 0,
+        }
+    ]
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     recommendations_path = tmp_path / "recommendations.csv"
     results_path = tmp_path / "results.csv"

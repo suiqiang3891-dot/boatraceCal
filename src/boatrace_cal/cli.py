@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
@@ -49,7 +49,11 @@ from boatrace_cal.strategies.value import (
     build_value_recommendation,
 )
 from boatrace_cal.validation.data_quality import build_historical_data_quality_report
-from boatrace_cal.validation.serialization import historical_data_quality_report_to_dict
+from boatrace_cal.validation.odds_quality import build_odds_quality_report
+from boatrace_cal.validation.serialization import (
+    historical_data_quality_report_to_dict,
+    odds_quality_report_to_dict,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -67,6 +71,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_candidate_detail(args)
     if args.command == "historical-quality-report":
         return _run_historical_quality_report(args)
+    if args.command == "odds-quality-report":
+        return _run_odds_quality_report(args)
     if args.command == "frequency-model-candidates":
         return _run_frequency_model_candidates(args)
     if args.command == "attach-odds-to-candidates":
@@ -116,6 +122,17 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_expected_race_arguments(quality)
     quality.add_argument("--bet-type", required=True, action="append")
     quality.add_argument("--output", required=True, type=Path)
+
+    odds_quality = subparsers.add_parser(
+        "odds-quality-report",
+        help="Build a JSON quality report from pre-race odds snapshot CSV files.",
+    )
+    odds_quality.add_argument("--odds", required=True, type=Path)
+    _add_expected_race_arguments(odds_quality)
+    odds_quality.add_argument("--bet-type", required=True, action="append")
+    odds_quality.add_argument("--prediction-as-of", required=True)
+    odds_quality.add_argument("--max-age-minutes", required=True, type=int)
+    odds_quality.add_argument("--output", required=True, type=Path)
 
     backtest = subparsers.add_parser(
         "backtest-report",
@@ -365,6 +382,18 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return 0
+
+
+def _run_odds_quality_report(args: argparse.Namespace) -> int:
+    report = build_odds_quality_report(
+        odds=load_odds_csv(args.odds),
+        expected_races=_collect_expected_races(args),
+        bet_types=tuple(BetType(value) for value in args.bet_type),
+        prediction_as_of=_parse_datetime(args.prediction_as_of, "prediction-as-of"),
+        max_snapshot_age=timedelta(minutes=args.max_age_minutes),
+    )
+    _write_json(args.output, odds_quality_report_to_dict(report))
     return 0
 
 
