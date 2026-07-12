@@ -83,10 +83,17 @@ def _selected_ids_within_daily_cap(
     if config.max_daily_stake_units is None:
         return frozenset(record.recommendation_id for record in selects)
 
-    return frozenset(
-        record.recommendation_id
-        for record in sorted(selects, key=_selection_rank)[: config.max_daily_stake_units]
-    )
+    selected_ids: set[str] = set()
+    date_groups: dict[object, list[Recommendation]] = {}
+    for record in selects:
+        date_groups.setdefault(record.race_id.race_date, []).append(record)
+
+    for group in date_groups.values():
+        selected_ids.update(
+            record.recommendation_id
+            for record in sorted(group, key=_selection_rank)[: config.max_daily_stake_units]
+        )
+    return frozenset(selected_ids)
 
 
 def _demote(recommendation: Recommendation, reason_code: str) -> Recommendation:

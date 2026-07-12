@@ -130,6 +130,33 @@ def test_risk_budget_applies_daily_unit_cap_after_race_cap() -> None:
     )
 
 
+def test_risk_budget_applies_daily_unit_cap_per_race_date() -> None:
+    day_1 = RaceId(date(2026, 7, 12), VenueCode("01"), 1)
+    day_2 = RaceId(date(2026, 7, 13), VenueCode("01"), 1)
+    recommendations = (
+        make_recommendation(
+            recommendation_id="day-1-kept",
+            race_id=day_1,
+            expected_value=Decimal("0.50"),
+        ),
+        make_recommendation(
+            recommendation_id="day-2-kept",
+            race_id=day_2,
+            expected_value=Decimal("0.40"),
+        ),
+    )
+
+    budgeted = apply_risk_budget(
+        recommendations,
+        RiskBudgetConfig(max_daily_stake_units=1),
+    )
+
+    assert [record.decision for record in budgeted] == [
+        Decision.SELECT,
+        Decision.SELECT,
+    ]
+
+
 def test_risk_budget_config_rejects_negative_limits() -> None:
     with pytest.raises(ValueError, match="max_selects_per_race"):
         RiskBudgetConfig(max_selects_per_race=-1)
