@@ -18,6 +18,11 @@ from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.domain.recommendations import ConfidenceLevel
 from boatrace_cal.domain.versions import ArtifactVersions
+from boatrace_cal.ingestion.odds import (
+    OddsSnapshotRecord,
+    latest_odds_by_combination,
+    load_odds_csv,
+)
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
@@ -64,6 +69,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_historical_quality_report(args)
     if args.command == "frequency-model-candidates":
         return _run_frequency_model_candidates(args)
+    if args.command == "attach-odds-to-candidates":
+        return _run_attach_odds_to_candidates(args)
     if args.command == "value-strategy-recommendations":
         return _run_value_strategy_recommendations(args)
     if args.command == "confirmed-review-list":
@@ -149,6 +156,14 @@ def _build_parser() -> argparse.ArgumentParser:
     value_strategy.add_argument("--min-conservative-expected-value", default="0")
     value_strategy.add_argument("--max-odds")
     value_strategy.add_argument("--output", required=True, type=Path)
+
+    attach_odds = subparsers.add_parser(
+        "attach-odds-to-candidates",
+        help="Attach latest time-safe odds snapshots to strategy candidates.",
+    )
+    attach_odds.add_argument("--candidates", required=True, type=Path)
+    attach_odds.add_argument("--odds", required=True, type=Path)
+    attach_odds.add_argument("--output", required=True, type=Path)
 
     candidate_status = subparsers.add_parser(
         "candidate-status",
@@ -420,6 +435,48 @@ def _run_value_strategy_recommendations(args: argparse.Namespace) -> int:
     )
     export_recommendations_csv(recommendations, args.output)
     return 0
+
+
+def _run_attach_odds_to_candidates(args: argparse.Namespace) -> int:
+    odds_records = load_odds_csv(args.odds)
+    candidates = tuple(
+        _candidate_with_latest_odds(candidate, odds_records)
+        for candidate in load_strategy_candidates_csv(args.candidates)
+    )
+    export_strategy_candidates_csv(candidates, args.output)
+    return 0
+
+
+def _candidate_with_latest_odds(
+    candidate: StrategyCandidate,
+    odds_records: tuple[OddsSnapshotRecord, ...],
+) -> StrategyCandidate:
+    latest = latest_odds_by_combination(
+        records=odds_records,
+        race_id=candidate.race_id,
+        as_of=candidate.as_of,
+    )
+    odds_record = latest.get(candidate.combination)
+    if odds_record is None:
+        return candidate
+
+    return StrategyCandidate(
+        recommendation_id=candidate.recommendation_id,
+        race_id=candidate.race_id,
+        combination=candidate.combination,
+        probability=candidate.probability,
+        odds=odds_record.odds,
+        confidence=candidate.confidence,
+        as_of=candidate.as_of,
+        versions=candidate.versions,
+        reason_codes=_append_reason_once(candidate.reason_codes, "odds_snapshot_attached"),
+    )
+
+
+def _append_reason_once(reason_codes: tuple[str, ...], reason_code: str) -> tuple[str, ...]:
+    if reason_code in reason_codes:
+        return reason_codes
+    return reason_codes + (reason_code,)
 
 
 def _run_candidate_status(args: argparse.Namespace) -> int:

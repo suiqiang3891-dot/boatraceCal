@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from boatrace_cal.cli import main
 from boatrace_cal.domain.recommendations import Decision
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
+from boatrace_cal.strategies.csv import load_strategy_candidates_csv
 
 
 def test_historical_quality_report_command_writes_json_report(tmp_path: Path) -> None:
@@ -347,6 +348,74 @@ def test_frequency_model_candidates_command_writes_strategy_candidate_csv(
     assert rows[-1].startswith("freq-20250103-01-01-6-5-4,")
     probabilities = [Decimal(row.split(",")[7]) for row in rows[1:]]
     assert abs(sum(probabilities) - Decimal("1")) < Decimal("1E-26")
+
+
+def test_attach_odds_to_candidates_command_writes_latest_available_odds(
+    tmp_path: Path,
+) -> None:
+    candidates_path = tmp_path / "strategy" / "candidates.csv"
+    odds_path = tmp_path / "market" / "odds.csv"
+    output_path = tmp_path / "strategy" / "candidates-with-odds.csv"
+    candidates_path.parent.mkdir(parents=True)
+    odds_path.parent.mkdir(parents=True)
+    candidates_path.write_text(
+        "\n".join(
+            (
+                "recommendation_id,race_date,venue,race_no,bet_type,combination,"
+                "confidence,probability,odds,as_of,data_version,feature_version,"
+                "model_version,strategy_version,reason_codes",
+                "freq-rec-1,2026-06-23,05,1,trifecta_ordered,3-1-2,medium,"
+                "0.25,,2026-06-23T04:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,frequency_baseline",
+                "freq-rec-2,2026-06-23,05,1,trifecta_ordered,1-2-3,medium,"
+                "0.10,,2026-06-23T03:53:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,frequency_baseline",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    odds_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,bet_type,combination,odds,"
+                "source,source_hash,observed_at,available_at,parser_version",
+                "2026-06-23,05,1,trifecta_ordered,3-1-2,5.2,official-odds,hash-old,"
+                "2026-06-23T03:50:00+00:00,2026-06-23T03:51:00+00:00,odds-v1",
+                "2026-06-23,05,1,trifecta_ordered,3-1-2,7.0,official-odds,hash-late,"
+                "2026-06-23T03:55:00+00:00,2026-06-23T03:56:00+00:00,odds-v1",
+                "2026-06-23,05,1,trifecta_ordered,3-1-2,9.9,official-odds,hash-future,"
+                "2026-06-23T04:05:00+00:00,2026-06-23T04:06:00+00:00,odds-v1",
+                "2026-06-23,05,1,trifecta_ordered,1-2-3,11.0,official-odds,hash-other,"
+                "2026-06-23T03:54:00+00:00,2026-06-23T03:55:00+00:00,odds-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "attach-odds-to-candidates",
+            "--candidates",
+            str(candidates_path),
+            "--odds",
+            str(odds_path),
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    candidates = load_strategy_candidates_csv(output_path)
+    assert candidates[0].odds == Decimal("7.0")
+    assert candidates[0].reason_codes == (
+        "frequency_baseline",
+        "odds_snapshot_attached",
+    )
+    assert candidates[1].odds is None
+    assert candidates[1].reason_codes == ("frequency_baseline",)
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
 def test_candidate_status_command_writes_business_date_status(tmp_path: Path) -> None:
