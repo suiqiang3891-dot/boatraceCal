@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from decimal import Decimal
 import json
 from pathlib import Path
 import tomllib
 from zipfile import ZipFile
 
 from boatrace_cal.cli import main
+from boatrace_cal.domain.recommendations import Decision
+from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 
 
 def test_historical_quality_report_command_writes_json_report(tmp_path: Path) -> None:
@@ -217,6 +220,66 @@ def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     assert payload["summary"]["selected_bet_count"] == 1
     assert payload["summary"]["net_profit_yen"] == "1100"
     assert payload["equity_curve"]["final_equity_yen"] == "1100"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_value_strategy_recommendations_command_writes_backtest_ready_csv(
+    tmp_path: Path,
+) -> None:
+    candidates_path = tmp_path / "strategy" / "candidates.csv"
+    output_path = tmp_path / "strategy" / "recommendations.csv"
+    candidates_path.parent.mkdir(parents=True)
+    candidates_path.write_text(
+        "\n".join(
+            (
+                "recommendation_id,race_date,venue,race_no,bet_type,combination,"
+                "confidence,probability,odds,as_of,data_version,feature_version,"
+                "model_version,strategy_version,reason_codes",
+                "strategy-rec-select,2025-01-02,01,1,trifecta_ordered,1-2-3,high,"
+                "0.25,5.2,2025-01-02T10:00:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,model_signal",
+                "strategy-rec-pass,2025-01-02,01,2,trifecta_ordered,1-3-2,medium,"
+                "0.18,,2025-01-02T10:05:00+00:00,data-v1,feature-v1,"
+                "model-v1,strategy-v1,night_preplan",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "value-strategy-recommendations",
+            "--candidates",
+            str(candidates_path),
+            "--min-expected-value",
+            "0.10",
+            "--conservative-margin",
+            "0.05",
+            "--min-conservative-expected-value",
+            "0.05",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    recommendations = load_recommendations_csv(output_path)
+    assert [record.recommendation_id for record in recommendations] == [
+        "strategy-rec-select",
+        "strategy-rec-pass",
+    ]
+    assert recommendations[0].decision is Decision.SELECT
+    assert recommendations[0].expected_value == Decimal("0.300")
+    assert recommendations[0].reason_codes == (
+        "model_signal",
+        "positive_ev",
+        "conservative_ev_ok",
+        "risk_ok",
+    )
+    assert recommendations[1].decision is Decision.PASS
+    assert recommendations[1].expected_value is None
+    assert recommendations[1].reason_codes == ("night_preplan", "odds_unavailable")
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 import json
 from pathlib import Path
 
@@ -29,6 +30,11 @@ from boatrace_cal.reviews import (
     confirmed_review_list_to_dict,
     load_reviews_json,
 )
+from boatrace_cal.strategies.csv import (
+    export_recommendations_csv,
+    load_strategy_candidates_csv,
+)
+from boatrace_cal.strategies.value import ValueStrategyConfig, build_value_recommendation
 from boatrace_cal.validation.data_quality import build_historical_data_quality_report
 from boatrace_cal.validation.serialization import historical_data_quality_report_to_dict
 
@@ -48,6 +54,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_candidate_detail(args)
     if args.command == "historical-quality-report":
         return _run_historical_quality_report(args)
+    if args.command == "value-strategy-recommendations":
+        return _run_value_strategy_recommendations(args)
     if args.command == "confirmed-review-list":
         return _run_confirmed_review_list(args)
     if args.command == "review-store-import":
@@ -102,6 +110,18 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_expected_race_arguments(backtest)
     backtest.add_argument("--bet-type", required=True, action="append")
     backtest.add_argument("--output", required=True, type=Path)
+
+    value_strategy = subparsers.add_parser(
+        "value-strategy-recommendations",
+        help="Apply EV and conservative EV gates to strategy candidates.",
+    )
+    value_strategy.add_argument("--candidates", required=True, type=Path)
+    value_strategy.add_argument("--min-probability", default="0")
+    value_strategy.add_argument("--min-expected-value", default="0")
+    value_strategy.add_argument("--conservative-margin", default="0.05")
+    value_strategy.add_argument("--min-conservative-expected-value", default="0")
+    value_strategy.add_argument("--max-odds")
+    value_strategy.add_argument("--output", required=True, type=Path)
 
     candidate_status = subparsers.add_parser(
         "candidate-status",
@@ -303,6 +323,33 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return 0
+
+
+def _run_value_strategy_recommendations(args: argparse.Namespace) -> int:
+    config = ValueStrategyConfig(
+        min_probability=_parse_decimal_argument(args.min_probability, "min-probability"),
+        min_expected_value=_parse_decimal_argument(
+            args.min_expected_value,
+            "min-expected-value",
+        ),
+        conservative_margin=_parse_decimal_argument(
+            args.conservative_margin,
+            "conservative-margin",
+        ),
+        min_conservative_expected_value=_parse_decimal_argument(
+            args.min_conservative_expected_value,
+            "min-conservative-expected-value",
+        ),
+        max_odds=None
+        if args.max_odds is None
+        else _parse_decimal_argument(args.max_odds, "max-odds"),
+    )
+    recommendations = tuple(
+        build_value_recommendation(candidate, config)
+        for candidate in load_strategy_candidates_csv(args.candidates)
+    )
+    export_recommendations_csv(recommendations, args.output)
     return 0
 
 
@@ -555,6 +602,13 @@ def _parse_datetime(value: str, name: str) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError(f"{name} must be timezone-aware")
     return parsed
+
+
+def _parse_decimal_argument(value: str, name: str) -> Decimal:
+    try:
+        return Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError(f"{name} must be a decimal") from exc
 
 
 def _race_id_sort_key(race_id: RaceId) -> tuple[date, str, int]:
