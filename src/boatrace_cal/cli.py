@@ -14,11 +14,14 @@ from boatrace_cal.api_contract import export_openapi_spec_json
 from boatrace_cal.api_services import CandidateQueryService, ReviewWorkflowService
 from boatrace_cal.backtest.export import export_backtest_report_json
 from boatrace_cal.backtest.runner import run_backtest
-from boatrace_cal.domain.bets import BetType
+from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.domain.races import RaceId, VenueCode
+from boatrace_cal.domain.recommendations import ConfidenceLevel
+from boatrace_cal.domain.versions import ArtifactVersions
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.models.trifecta_frequency import fit_trifecta_frequency_model
 from boatrace_cal.review_archive import freeze_confirmed_review_list
 from boatrace_cal.review_excel import (
     export_confirmed_review_list_xlsx,
@@ -32,9 +35,14 @@ from boatrace_cal.reviews import (
 )
 from boatrace_cal.strategies.csv import (
     export_recommendations_csv,
+    export_strategy_candidates_csv,
     load_strategy_candidates_csv,
 )
-from boatrace_cal.strategies.value import ValueStrategyConfig, build_value_recommendation
+from boatrace_cal.strategies.value import (
+    StrategyCandidate,
+    ValueStrategyConfig,
+    build_value_recommendation,
+)
 from boatrace_cal.validation.data_quality import build_historical_data_quality_report
 from boatrace_cal.validation.serialization import historical_data_quality_report_to_dict
 
@@ -54,6 +62,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_candidate_detail(args)
     if args.command == "historical-quality-report":
         return _run_historical_quality_report(args)
+    if args.command == "frequency-model-candidates":
+        return _run_frequency_model_candidates(args)
     if args.command == "value-strategy-recommendations":
         return _run_value_strategy_recommendations(args)
     if args.command == "confirmed-review-list":
@@ -110,6 +120,23 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_expected_race_arguments(backtest)
     backtest.add_argument("--bet-type", required=True, action="append")
     backtest.add_argument("--output", required=True, type=Path)
+
+    frequency_model = subparsers.add_parser(
+        "frequency-model-candidates",
+        help="Fit the ordered-trifecta frequency baseline and write strategy candidates.",
+    )
+    frequency_model.add_argument("--results", required=True, type=Path)
+    frequency_model.add_argument("--prediction-as-of", required=True)
+    frequency_model.add_argument("--race-date", required=True)
+    frequency_model.add_argument("--venue", required=True)
+    frequency_model.add_argument("--race-no", required=True, type=int)
+    frequency_model.add_argument("--smoothing", default="1")
+    frequency_model.add_argument("--confidence", default="medium")
+    frequency_model.add_argument("--data-version", required=True)
+    frequency_model.add_argument("--feature-version", required=True)
+    frequency_model.add_argument("--model-version", required=True)
+    frequency_model.add_argument("--strategy-version", required=True)
+    frequency_model.add_argument("--output", required=True, type=Path)
 
     value_strategy = subparsers.add_parser(
         "value-strategy-recommendations",
@@ -323,6 +350,48 @@ def _run_historical_quality_report(args: argparse.Namespace) -> int:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    return 0
+
+
+def _run_frequency_model_candidates(args: argparse.Namespace) -> int:
+    prediction_as_of = _parse_datetime(args.prediction_as_of, "prediction-as-of")
+    model = fit_trifecta_frequency_model(
+        load_results_csv(args.results),
+        as_of=prediction_as_of,
+        smoothing=_parse_decimal_argument(args.smoothing, "smoothing"),
+    )
+    race_id = RaceId(
+        race_date=date.fromisoformat(args.race_date),
+        venue=VenueCode(args.venue),
+        race_no=args.race_no,
+    )
+    versions = ArtifactVersions(
+        data=args.data_version,
+        feature=args.feature_version,
+        model=args.model_version,
+        strategy=args.strategy_version,
+    )
+    candidates = tuple(
+        StrategyCandidate(
+            recommendation_id=f"freq-{race_id}-{item.combination.key}",
+            race_id=race_id,
+            combination=BetCombination(
+                BetType.TRIFECTA_ORDERED,
+                item.combination.lanes,
+            ),
+            probability=item.probability,
+            odds=None,
+            confidence=ConfidenceLevel(args.confidence),
+            as_of=prediction_as_of,
+            versions=versions,
+            reason_codes=(
+                "frequency_baseline",
+                f"training_races_{model.training_race_count}",
+            ),
+        )
+        for item in model.probabilities
+    )
+    export_strategy_candidates_csv(candidates, args.output)
     return 0
 
 

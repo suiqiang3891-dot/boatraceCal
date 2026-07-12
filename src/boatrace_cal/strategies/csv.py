@@ -66,6 +66,24 @@ def load_strategy_candidates_csv(path: Path | str) -> tuple[StrategyCandidate, .
         return tuple(_candidate_from_row(row) for row in reader)
 
 
+def export_strategy_candidates_csv(
+    candidates: tuple[StrategyCandidate, ...],
+    path: Path | str,
+) -> None:
+    """Write strategy candidates for downstream value gates."""
+
+    if type(candidates) is not tuple or any(
+        type(candidate) is not StrategyCandidate for candidate in candidates
+    ):
+        raise ValueError("candidates must be a tuple of StrategyCandidate")
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as candidates_file:
+        writer = csv.DictWriter(candidates_file, fieldnames=_CANDIDATE_FIELDS)
+        writer.writeheader()
+        writer.writerows(_candidate_to_row(candidate) for candidate in candidates)
+
+
 def export_recommendations_csv(
     recommendations: tuple[Recommendation, ...],
     path: Path | str,
@@ -140,6 +158,26 @@ def _recommendation_to_row(recommendation: Recommendation) -> dict[str, str]:
         "model_version": recommendation.versions.model,
         "strategy_version": recommendation.versions.strategy,
         "reason_codes": "|".join(recommendation.reason_codes),
+    }
+
+
+def _candidate_to_row(candidate: StrategyCandidate) -> dict[str, str]:
+    return {
+        "recommendation_id": candidate.recommendation_id,
+        "race_date": candidate.race_id.race_date.isoformat(),
+        "venue": candidate.race_id.venue.value,
+        "race_no": str(candidate.race_id.race_no),
+        "bet_type": candidate.combination.bet_type.value,
+        "combination": candidate.combination.key,
+        "confidence": candidate.confidence.value,
+        "probability": str(candidate.probability),
+        "odds": "" if candidate.odds is None else str(candidate.odds),
+        "as_of": candidate.as_of.isoformat(),
+        "data_version": candidate.versions.data,
+        "feature_version": candidate.versions.feature,
+        "model_version": candidate.versions.model,
+        "strategy_version": candidate.versions.strategy,
+        "reason_codes": "|".join(candidate.reason_codes),
     }
 
 

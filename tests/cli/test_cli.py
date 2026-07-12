@@ -283,6 +283,72 @@ def test_value_strategy_recommendations_command_writes_backtest_ready_csv(
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_frequency_model_candidates_command_writes_strategy_candidate_csv(
+    tmp_path: Path,
+) -> None:
+    results_path = tmp_path / "models" / "results.csv"
+    output_path = tmp_path / "models" / "candidates.csv"
+    results_path.parent.mkdir(parents=True)
+    results_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,first,second,third,source,source_hash,"
+                "observed_at,available_at,parser_version",
+                "2025-01-01,01,1,1,2,3,official-results,result-hash-1,"
+                "2025-01-01T08:00:00+00:00,2025-01-01T08:01:00+00:00,results-v1",
+                "2025-01-02,01,1,4,5,6,official-results,result-hash-2,"
+                "2025-01-02T08:00:00+00:00,2025-01-02T10:01:00+00:00,results-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "frequency-model-candidates",
+            "--results",
+            str(results_path),
+            "--prediction-as-of",
+            "2025-01-02T10:00:00+00:00",
+            "--race-date",
+            "2025-01-03",
+            "--venue",
+            "01",
+            "--race-no",
+            "1",
+            "--data-version",
+            "data-v1",
+            "--feature-version",
+            "feature-v1",
+            "--model-version",
+            "trifecta-frequency-v1",
+            "--strategy-version",
+            "strategy-v1",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    rows = output_path.read_text(encoding="utf-8").splitlines()
+    assert rows[0] == (
+        "recommendation_id,race_date,venue,race_no,bet_type,combination,confidence,"
+        "probability,odds,as_of,data_version,feature_version,model_version,"
+        "strategy_version,reason_codes"
+    )
+    assert len(rows) == 121
+    assert rows[1] == (
+        "freq-20250103-01-01-1-2-3,2025-01-03,01,1,trifecta_ordered,1-2-3,"
+        "medium,0.01652892561983471074380165289,,2025-01-02T10:00:00+00:00,"
+        "data-v1,feature-v1,trifecta-frequency-v1,strategy-v1,"
+        "frequency_baseline|training_races_1"
+    )
+    assert rows[-1].startswith("freq-20250103-01-01-6-5-4,")
+    probabilities = [Decimal(row.split(",")[7]) for row in rows[1:]]
+    assert abs(sum(probabilities) - Decimal("1")) < Decimal("1E-26")
+
+
 def test_candidate_status_command_writes_business_date_status(tmp_path: Path) -> None:
     output_path = tmp_path / "api" / "status.json"
 
