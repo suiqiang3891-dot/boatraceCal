@@ -8,6 +8,7 @@ from datetime import date, datetime
 import json
 from pathlib import Path
 
+from boatrace_cal.api_adapter import ApiRequest, AnalysisApiAdapter
 from boatrace_cal.api_contract import export_openapi_spec_json
 from boatrace_cal.api_services import CandidateQueryService, ReviewWorkflowService
 from boatrace_cal.backtest.export import export_backtest_report_json
@@ -67,6 +68,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_review_workflow_export(args)
     if args.command == "export-job-status":
         return _run_export_job_status(args)
+    if args.command == "api-request":
+        return _run_api_request(args)
     if args.command == "openapi-spec":
         return _run_openapi_spec(args)
     parser.print_help()
@@ -213,6 +216,32 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_review_workflow_service_arguments(export_job_status)
     export_job_status.add_argument("--job-id", required=True)
     export_job_status.add_argument("--output", required=True, type=Path)
+
+    api_request = subparsers.add_parser(
+        "api-request",
+        help="Execute one OpenAPI-shaped request through the local dependency-free adapter.",
+    )
+    api_request.add_argument("--method", required=True)
+    api_request.add_argument("--path", required=True)
+    api_request.add_argument("--body", type=Path)
+    api_request.add_argument("--report-business-date")
+    api_request.add_argument("--report", type=Path)
+    api_request.add_argument(
+        "--store",
+        type=Path,
+        default=Path("data/reviews/reviews.json"),
+    )
+    api_request.add_argument(
+        "--archive-dir",
+        type=Path,
+        default=Path("artifacts/review-archives"),
+    )
+    api_request.add_argument(
+        "--export-dir",
+        type=Path,
+        default=Path("artifacts/review-exports"),
+    )
+    api_request.add_argument("--output", required=True, type=Path)
 
     openapi = subparsers.add_parser(
         "openapi-spec",
@@ -409,6 +438,30 @@ def _run_export_job_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_api_request(args: argparse.Namespace) -> int:
+    adapter = AnalysisApiAdapter(
+        report_paths=_api_request_report_paths(args),
+        review_store_path=args.store,
+        archive_dir=args.archive_dir,
+        export_dir=args.export_dir,
+    )
+    response = adapter.handle(
+        ApiRequest(
+            method=args.method,
+            path=args.path,
+            body=_read_optional_json_body(args.body),
+        )
+    )
+    _write_json(
+        args.output,
+        {
+            "status_code": response.status_code,
+            "body": response.body,
+        },
+    )
+    return 0
+
+
 def _run_openapi_spec(args: argparse.Namespace) -> int:
     export_openapi_spec_json(args.output)
     return 0
@@ -424,6 +477,21 @@ def _review_workflow_service(args: argparse.Namespace) -> ReviewWorkflowService:
         archive_dir=args.archive_dir,
         export_dir=args.export_dir,
     )
+
+
+def _api_request_report_paths(args: argparse.Namespace) -> dict[str, Path | str]:
+    if args.report_business_date is None and args.report is None:
+        return {}
+    if args.report_business_date is None or args.report is None:
+        raise ValueError("report-business-date and report must be provided together")
+    return {args.report_business_date: args.report}
+
+
+def _read_optional_json_body(path: Path | None) -> object | None:
+    if path is None:
+        return None
+    payload: object = json.loads(path.read_text(encoding="utf-8"))
+    return payload
 
 
 def _write_json(output_path: Path, payload: object) -> None:

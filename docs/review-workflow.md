@@ -97,8 +97,35 @@ boatrace-cal export-job-status `
 
 `review-workflow-export` 会写入 `.xlsx` 文件和导出任务 manifest。`export-job-status` 输出对应 `/exports/{job_id}`。
 
+## 6. 按 OpenAPI 路径演练本地请求
+
+也可以用 `api-request` 直接按 OpenAPI 的 method/path 调用本地 adapter。输出会保留
+`status_code` 和 JSON `body`，用于在没有 FastAPI 依赖时验证路由语义和 `ApiError` 形状：
+
+```powershell
+boatrace-cal api-request `
+  --method POST `
+  --path /reviews/import `
+  --store data/reviews/reviews.json `
+  --archive-dir artifacts/review-archives `
+  --export-dir artifacts/review-exports `
+  --body downloads/boatrace-reviews-2025-01-02.json `
+  --output artifacts/api/local-request.json
+```
+
+候选查询路径可以通过 `--report-business-date` 和 `--report` 挂载回测报告：
+
+```powershell
+boatrace-cal api-request `
+  --method GET `
+  --path /business-dates/2025-01-02/candidates/sample-rec-hit `
+  --report-business-date 2025-01-02 `
+  --report examples/sample_backtest/report.json `
+  --output artifacts/api/local-candidate-detail.json
+```
+
 ## 风险边界
 
 - 这些命令只演练纸面模拟审核链路，不提供自动下单。
 - UI 导入的回测报告、人工审核状态和服务端 store 是分离的；审核动作不会改写模型推荐或回测事实。
-- 真正接入 FastAPI 时，HTTP 路由应复用 `ReviewWorkflowService`，不要重新实现一套业务逻辑。
+- 真正接入 FastAPI 时，HTTP 路由应复用 `AnalysisApiAdapter` 和 `ReviewWorkflowService`，不要重新实现一套业务逻辑。

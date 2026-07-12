@@ -628,6 +628,92 @@ def test_review_workflow_archive_command_writes_openapi_response(tmp_path: Path)
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_api_request_command_routes_review_import_through_adapter(tmp_path: Path) -> None:
+    store_path = tmp_path / "server" / "reviews.json"
+    input_path = tmp_path / "browser" / "reviews.json"
+    output_path = tmp_path / "responses" / "api-request.json"
+    input_path.parent.mkdir(parents=True)
+    input_path.write_text(
+        json.dumps(
+            {
+                "reviews": [
+                    {
+                        "recommendation_id": "rec-api-request",
+                        "race_id": "20250102-01-01",
+                        "decision": "confirmed",
+                        "stake_units": 2,
+                        "notes": "local route",
+                        "reviewed_at": "2026-07-11T03:20:00+00:00",
+                        "reviewed_by": "browser-analyst",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "api-request",
+            "--method",
+            "POST",
+            "--path",
+            "/reviews/import",
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(tmp_path / "exports"),
+            "--body",
+            str(input_path),
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload == {"status_code": 200, "body": {"stored_count": 1}}
+    stored_reviews = json.loads(store_path.read_text(encoding="utf-8"))
+    assert stored_reviews[0]["recommendation_id"] == "rec-api-request"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_api_request_command_writes_stable_error_response(tmp_path: Path) -> None:
+    output_path = tmp_path / "responses" / "api-error.json"
+
+    exit_code = main(
+        (
+            "api-request",
+            "--method",
+            "GET",
+            "--path",
+            "/business-dates/2025-01-02/candidates/missing",
+            "--store",
+            str(tmp_path / "server" / "reviews.json"),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(tmp_path / "exports"),
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["status_code"] == 404
+    assert payload["body"]["code"] == "DQ_MISSING_ENTRY"
+    assert payload["body"]["details"] == {
+        "method": "GET",
+        "path": "/business-dates/2025-01-02/candidates/missing",
+    }
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path) -> None:
     store_path = tmp_path / "server" / "reviews.json"
     archive_dir = tmp_path / "archives"
