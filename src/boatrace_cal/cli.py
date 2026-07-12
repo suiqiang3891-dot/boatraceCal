@@ -26,6 +26,7 @@ from boatrace_cal.ingestion.odds import (
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.models.market_implied import build_market_implied_model
 from boatrace_cal.models.trifecta_frequency import fit_trifecta_frequency_model
 from boatrace_cal.review_archive import freeze_confirmed_review_list
 from boatrace_cal.review_excel import (
@@ -76,6 +77,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_odds_quality_report(args)
     if args.command == "frequency-model-candidates":
         return _run_frequency_model_candidates(args)
+    if args.command == "market-implied-candidates":
+        return _run_market_implied_candidates(args)
     if args.command == "attach-odds-to-candidates":
         return _run_attach_odds_to_candidates(args)
     if args.command == "value-strategy-recommendations":
@@ -162,6 +165,23 @@ def _build_parser() -> argparse.ArgumentParser:
     frequency_model.add_argument("--model-version", required=True)
     frequency_model.add_argument("--strategy-version", required=True)
     frequency_model.add_argument("--output", required=True, type=Path)
+
+    market_implied = subparsers.add_parser(
+        "market-implied-candidates",
+        help="Build market-implied baseline candidates from latest odds snapshots.",
+    )
+    market_implied.add_argument("--odds", required=True, type=Path)
+    market_implied.add_argument("--prediction-as-of", required=True)
+    market_implied.add_argument("--race-date", required=True)
+    market_implied.add_argument("--venue", required=True)
+    market_implied.add_argument("--race-no", required=True, type=int)
+    market_implied.add_argument("--bet-type", required=True)
+    market_implied.add_argument("--confidence", default="medium")
+    market_implied.add_argument("--data-version", required=True)
+    market_implied.add_argument("--feature-version", required=True)
+    market_implied.add_argument("--model-version", required=True)
+    market_implied.add_argument("--strategy-version", required=True)
+    market_implied.add_argument("--output", required=True, type=Path)
 
     value_strategy = subparsers.add_parser(
         "value-strategy-recommendations",
@@ -435,6 +455,47 @@ def _run_frequency_model_candidates(args: argparse.Namespace) -> int:
             reason_codes=(
                 "frequency_baseline",
                 f"training_races_{model.training_race_count}",
+            ),
+        )
+        for item in model.probabilities
+    )
+    export_strategy_candidates_csv(candidates, args.output)
+    return 0
+
+
+def _run_market_implied_candidates(args: argparse.Namespace) -> int:
+    prediction_as_of = _parse_datetime(args.prediction_as_of, "prediction-as-of")
+    race_id = RaceId(
+        race_date=date.fromisoformat(args.race_date),
+        venue=VenueCode(args.venue),
+        race_no=args.race_no,
+    )
+    bet_type = BetType(args.bet_type)
+    model = build_market_implied_model(
+        load_odds_csv(args.odds),
+        race_id=race_id,
+        bet_type=bet_type,
+        as_of=prediction_as_of,
+    )
+    versions = ArtifactVersions(
+        data=args.data_version,
+        feature=args.feature_version,
+        model=args.model_version,
+        strategy=args.strategy_version,
+    )
+    candidates = tuple(
+        StrategyCandidate(
+            recommendation_id=f"market-{race_id}-{item.combination.key}",
+            race_id=race_id,
+            combination=item.combination,
+            probability=item.probability,
+            odds=item.odds,
+            confidence=ConfidenceLevel(args.confidence),
+            as_of=prediction_as_of,
+            versions=versions,
+            reason_codes=(
+                "market_implied_baseline",
+                f"odds_snapshots_{model.snapshot_count}",
             ),
         )
         for item in model.probabilities

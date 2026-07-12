@@ -464,6 +464,73 @@ def test_frequency_model_candidates_command_writes_strategy_candidate_csv(
     assert abs(sum(probabilities) - Decimal("1")) < Decimal("1E-26")
 
 
+def test_market_implied_candidates_command_writes_strategy_candidate_csv(
+    tmp_path: Path,
+) -> None:
+    odds_path = tmp_path / "models" / "odds.csv"
+    output_path = tmp_path / "models" / "market-candidates.csv"
+    odds_path.parent.mkdir(parents=True)
+    odds_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,bet_type,combination,odds,"
+                "source,source_hash,observed_at,available_at,parser_version",
+                "2026-06-23,05,1,exacta_ordered,1-2,2,official-odds,hash-a,"
+                "2026-06-23T03:55:00+00:00,2026-06-23T03:55:00+00:00,odds-v1",
+                "2026-06-23,05,1,exacta_ordered,2-1,4,official-odds,hash-b,"
+                "2026-06-23T03:56:00+00:00,2026-06-23T03:56:00+00:00,odds-v1",
+                "2026-06-23,05,1,exacta_ordered,1-2,9,official-odds,hash-future,"
+                "2026-06-23T04:01:00+00:00,2026-06-23T04:01:00+00:00,odds-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "market-implied-candidates",
+            "--odds",
+            str(odds_path),
+            "--prediction-as-of",
+            "2026-06-23T04:00:00+00:00",
+            "--race-date",
+            "2026-06-23",
+            "--venue",
+            "05",
+            "--race-no",
+            "1",
+            "--bet-type",
+            "exacta_ordered",
+            "--data-version",
+            "data-v1",
+            "--feature-version",
+            "feature-v1",
+            "--model-version",
+            "market-implied-v1",
+            "--strategy-version",
+            "strategy-v1",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    candidates = load_strategy_candidates_csv(output_path)
+    assert [candidate.recommendation_id for candidate in candidates] == [
+        "market-20260623-05-01-1-2",
+        "market-20260623-05-01-2-1",
+    ]
+    assert candidates[0].probability == Decimal("0.6666666666666666666666666667")
+    assert candidates[0].odds == Decimal("2")
+    assert candidates[0].reason_codes == (
+        "market_implied_baseline",
+        "odds_snapshots_2",
+    )
+    assert candidates[1].probability == Decimal("0.3333333333333333333333333333")
+    assert candidates[1].odds == Decimal("4")
+
+
 def test_attach_odds_to_candidates_command_writes_latest_available_odds(
     tmp_path: Path,
 ) -> None:
