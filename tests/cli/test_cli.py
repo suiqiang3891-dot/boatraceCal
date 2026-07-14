@@ -368,6 +368,68 @@ def test_job_ledger_commands_record_and_read_job_status(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_job_ledger_register_due_command_is_idempotent(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "jobs" / "ledger.json"
+    due_path = tmp_path / "jobs" / "snapshot-due.json"
+    output_path = tmp_path / "jobs" / "register-due.json"
+    due_path.parent.mkdir(parents=True)
+    due_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "snapshot-job-due-v1",
+                "jobs": [
+                    {
+                        "job_key": "official|05|2026-06-23|1|odds|T15",
+                        "scheduled_at": "2026-06-23T04:15:00+00:00",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    first_exit_code = main(
+        (
+            "job-ledger-register-due",
+            "--ledger",
+            str(ledger_path),
+            "--due",
+            str(due_path),
+            "--updated-at",
+            "2026-06-23T04:14:00+00:00",
+            "--checkpoint",
+            "snapshot-due-20260623T0414Z",
+            "--output",
+            str(output_path),
+        )
+    )
+    second_exit_code = main(
+        (
+            "job-ledger-register-due",
+            "--ledger",
+            str(ledger_path),
+            "--due",
+            str(due_path),
+            "--updated-at",
+            "2026-06-23T04:14:00+00:00",
+            "--checkpoint",
+            "snapshot-due-20260623T0414Z",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert first_exit_code == 0
+    assert second_exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "job-ledger-register-due-v1"
+    assert payload["registered_count"] == 0
+    assert payload["skipped_existing_count"] == 1
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> None:
     odds_path = tmp_path / "market" / "odds.csv"
     output_path = tmp_path / "reports" / "odds-change-alert.json"

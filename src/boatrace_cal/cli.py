@@ -28,7 +28,7 @@ from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
 from boatrace_cal.jobs.contracts import JobStatus
-from boatrace_cal.jobs.ledger import FileJobLedger, parse_job_key
+from boatrace_cal.jobs.ledger import FileJobLedger, parse_job_key, register_due_jobs
 from boatrace_cal.jobs.snapshot_plan import (
     build_prerace_snapshot_plan,
     export_snapshot_plan_json,
@@ -100,6 +100,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_job_ledger_record(args)
     if args.command == "job-ledger-get":
         return _run_job_ledger_get(args)
+    if args.command == "job-ledger-register-due":
+        return _run_job_ledger_register_due(args)
     if args.command == "odds-change-alert":
         return _run_odds_change_alert(args)
     if args.command == "frequency-model-candidates":
@@ -208,6 +210,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _add_job_ledger_arguments(job_ledger_get)
     job_ledger_get.add_argument("--output", required=True, type=Path)
+
+    job_ledger_register_due = subparsers.add_parser(
+        "job-ledger-register-due",
+        help="Register all due snapshot jobs as pending in a local JSON ledger.",
+    )
+    job_ledger_register_due.add_argument("--ledger", required=True, type=Path)
+    job_ledger_register_due.add_argument("--due", required=True, type=Path)
+    job_ledger_register_due.add_argument("--updated-at", required=True)
+    job_ledger_register_due.add_argument("--checkpoint")
+    job_ledger_register_due.add_argument("--output", required=True, type=Path)
 
     odds_change_alert = subparsers.add_parser(
         "odds-change-alert",
@@ -590,6 +602,18 @@ def _run_job_ledger_get(args: argparse.Namespace) -> int:
     if record is None:
         raise ValueError(f"job_key not found: {args.job_key}")
     _write_json(args.output, record.to_dict())
+    return 0
+
+
+def _run_job_ledger_register_due(args: argparse.Namespace) -> int:
+    due_payload = json.loads(args.due.read_text(encoding="utf-8"))
+    payload = register_due_jobs(
+        FileJobLedger(args.ledger),
+        due_payload,
+        updated_at=_parse_datetime(args.updated_at, "updated-at"),
+        checkpoint=args.checkpoint,
+    )
+    _write_json(args.output, payload)
     return 0
 
 

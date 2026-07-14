@@ -4,7 +4,11 @@ import pytest
 
 from boatrace_cal.domain.races import VenueCode
 from boatrace_cal.jobs.contracts import JobKey, JobStatus, SnapshotTarget
-from boatrace_cal.jobs.ledger import FileJobLedger, parse_job_key
+from boatrace_cal.jobs.ledger import (
+    FileJobLedger,
+    parse_job_key,
+    register_due_jobs,
+)
 
 
 def test_file_job_ledger_records_auditable_lifecycle_metadata(tmp_path) -> None:
@@ -94,3 +98,38 @@ def test_parse_job_key_round_trips_canonical_key() -> None:
 
     assert job_key.key == "official|05|2026-06-23|*|entries|historical"
     assert job_key.race_no is None
+
+
+def test_register_due_jobs_is_idempotent(tmp_path) -> None:
+    ledger = FileJobLedger(tmp_path / "jobs.json")
+    due_payload = {
+        "schema_version": "snapshot-job-due-v1",
+        "jobs": [
+            {
+                "job_key": "official|05|2026-06-23|1|odds|T15",
+                "scheduled_at": "2026-06-23T04:15:00+00:00",
+            }
+        ],
+    }
+
+    first = register_due_jobs(
+        ledger,
+        due_payload,
+        updated_at=datetime(2026, 6, 23, 4, 14, tzinfo=timezone.utc),
+        checkpoint="snapshot-due-20260623T0414Z",
+    )
+    second = register_due_jobs(
+        ledger,
+        due_payload,
+        updated_at=datetime(2026, 6, 23, 4, 14, tzinfo=timezone.utc),
+        checkpoint="snapshot-due-20260623T0414Z",
+    )
+
+    assert first["registered_count"] == 1
+    assert first["skipped_existing_count"] == 0
+    assert second["registered_count"] == 0
+    assert second["skipped_existing_count"] == 1
+    record = ledger.get(parse_job_key("official|05|2026-06-23|1|odds|T15"))
+    assert record is not None
+    assert record.status is JobStatus.PENDING
+    assert record.checkpoint == "snapshot-due-20260623T0414Z"

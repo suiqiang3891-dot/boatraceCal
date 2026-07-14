@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 import json
 from pathlib import Path
+from collections.abc import Mapping
 
 from boatrace_cal.domain.races import VenueCode
 from boatrace_cal.jobs.contracts import JobKey, JobStatus, SnapshotTarget, transition
@@ -201,6 +202,54 @@ def parse_job_key(value: str) -> JobKey:
         data_type=data_type,
         snapshot_target=SnapshotTarget(snapshot_target),
     )
+
+
+def register_due_jobs(
+    ledger: FileJobLedger,
+    due_payload: Mapping[str, object],
+    *,
+    updated_at: datetime,
+    checkpoint: str | None = None,
+) -> dict[str, object]:
+    """Register due jobs as pending without duplicating existing ledger entries."""
+
+    if type(ledger) is not FileJobLedger:
+        raise TypeError("ledger must be a FileJobLedger")
+    if due_payload.get("schema_version") != "snapshot-job-due-v1":
+        raise ValueError("due payload must use schema_version snapshot-job-due-v1")
+    raw_jobs = due_payload.get("jobs")
+    if not isinstance(raw_jobs, list):
+        raise ValueError("due payload jobs must be a list")
+
+    records: list[dict[str, object]] = []
+    registered_count = 0
+    skipped_existing_count = 0
+    for raw_job in raw_jobs:
+        if not isinstance(raw_job, dict):
+            raise ValueError("due payload jobs must contain objects")
+        job_key = parse_job_key(_required_string(raw_job, "job_key"))
+        existing = ledger.get(job_key)
+        if existing is None:
+            record = ledger.record(
+                job_key,
+                JobStatus.PENDING,
+                updated_at=updated_at,
+                checkpoint=checkpoint,
+            )
+            registered_count += 1
+        else:
+            record = existing
+            skipped_existing_count += 1
+        records.append(record.to_dict())
+
+    return {
+        "schema_version": "job-ledger-register-due-v1",
+        "source_schema_version": "snapshot-job-due-v1",
+        "registered_count": registered_count,
+        "skipped_existing_count": skipped_existing_count,
+        "job_count": len(records),
+        "jobs": records,
+    }
 
 
 def _record_from_parts(

@@ -82,6 +82,17 @@ boatrace-cal job-ledger-get `
   --output .\artifacts\jobs\job-status.json
 ```
 
+也可以把 `snapshot-job-due` 的输出批量登记为 `pending`。重复执行同一个 due 文件不会创建重复任务；已存在的 `job_key` 会计入 `skipped_existing_count`。
+
+```powershell
+boatrace-cal job-ledger-register-due `
+  --ledger .\artifacts\jobs\ledger.json `
+  --due .\artifacts\jobs\snapshot-due.json `
+  --updated-at 2026-06-23T04:14:00+00:00 `
+  --checkpoint snapshot-due-20260623T0414Z `
+  --output .\artifacts\jobs\register-due.json
+```
+
 ## T-5 赔率变化告警
 
 T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：
