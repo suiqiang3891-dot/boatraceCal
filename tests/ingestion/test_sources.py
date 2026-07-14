@@ -8,8 +8,10 @@ from boatrace_cal.ingestion.sources import (
     QuarantineCleanupResult,
     QuarantinedResponse,
     SourceResponseMetadata,
+    cleanup_expired_quarantine_manifest,
     cleanup_expired_quarantine,
     quarantine_response,
+    quarantined_response_to_dict,
     save_quarantined_response_body,
 )
 
@@ -159,5 +161,58 @@ def test_cleanup_expired_quarantine_deletes_only_expired_files(tmp_path: Path) -
         missing_count=1,
         failed_paths=(),
     )
+    assert not expired_path.exists()
+    assert retained_path.read_bytes() == b"retained"
+
+
+def test_cleanup_expired_quarantine_manifest_returns_audit_report(
+    tmp_path: Path,
+) -> None:
+    metadata = SourceResponseMetadata(
+        url="https://example.test/result",
+        fetched_at=datetime(2026, 6, 1, 4, 0, tzinfo=timezone.utc),
+        http_status=503,
+        content_sha256="f" * 64,
+        parser_version="parser-v1",
+    )
+    expired_path = tmp_path / "expired.html"
+    retained_path = tmp_path / "retained.html"
+    expired_path.write_bytes(b"expired")
+    retained_path.write_bytes(b"retained")
+    expired = QuarantinedResponse(
+        metadata=metadata,
+        saved_path=expired_path,
+        reason_code=ErrorCode.SOURCE_UNAVAILABLE,
+        retained_until=date(2026, 6, 10),
+    )
+    retained = QuarantinedResponse(
+        metadata=metadata,
+        saved_path=retained_path,
+        reason_code=ErrorCode.SOURCE_UNAVAILABLE,
+        retained_until=date(2026, 7, 10),
+    )
+
+    payload = cleanup_expired_quarantine_manifest(
+        {
+            "schema_version": "quarantine-manifest-v1",
+            "records": [
+                quarantined_response_to_dict(retained),
+                quarantined_response_to_dict(expired),
+            ],
+        },
+        as_of=date(2026, 6, 30),
+    )
+
+    assert payload == {
+        "schema_version": "quarantine-cleanup-v1",
+        "source_schema_version": "quarantine-manifest-v1",
+        "as_of": "2026-06-30",
+        "record_count": 2,
+        "deleted_count": 1,
+        "deleted_bytes": 7,
+        "missing_count": 0,
+        "failed_count": 0,
+        "failed_paths": [],
+    }
     assert not expired_path.exists()
     assert retained_path.read_bytes() == b"retained"

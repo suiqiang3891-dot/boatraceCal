@@ -1,5 +1,6 @@
 """Auditable source response metadata and quarantine records."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -174,6 +175,76 @@ def cleanup_expired_quarantine(
     )
 
 
+def quarantined_response_to_dict(record: QuarantinedResponse) -> dict[str, object]:
+    """Serialize one quarantine record for a durable manifest."""
+
+    if type(record) is not QuarantinedResponse:
+        raise TypeError("record must be a QuarantinedResponse")
+    return {
+        "metadata": {
+            "url": record.metadata.url,
+            "fetched_at": record.metadata.fetched_at.isoformat(),
+            "http_status": record.metadata.http_status,
+            "content_sha256": record.metadata.content_sha256,
+            "parser_version": record.metadata.parser_version,
+        },
+        "saved_path": str(record.saved_path),
+        "reason_code": record.reason_code.value,
+        "retained_until": record.retained_until.isoformat(),
+    }
+
+
+def quarantined_response_from_dict(payload: Mapping[str, object]) -> QuarantinedResponse:
+    """Parse one quarantine manifest record."""
+
+    if not isinstance(payload, Mapping):
+        raise TypeError("payload must be a mapping")
+    metadata_payload = _required_mapping(payload, "metadata")
+    return QuarantinedResponse(
+        metadata=SourceResponseMetadata(
+            url=_required_string(metadata_payload, "url"),
+            fetched_at=_parse_aware_datetime(
+                _required_string(metadata_payload, "fetched_at"),
+            ),
+            http_status=_required_int(metadata_payload, "http_status"),
+            content_sha256=_required_string(metadata_payload, "content_sha256"),
+            parser_version=_required_string(metadata_payload, "parser_version"),
+        ),
+        saved_path=Path(_required_string(payload, "saved_path")),
+        reason_code=ErrorCode(_required_string(payload, "reason_code")),
+        retained_until=date.fromisoformat(_required_string(payload, "retained_until")),
+    )
+
+
+def cleanup_expired_quarantine_manifest(
+    manifest_payload: Mapping[str, object],
+    *,
+    as_of: date,
+) -> dict[str, object]:
+    """Delete expired quarantine records from a manifest and return an audit payload."""
+
+    if not isinstance(manifest_payload, Mapping):
+        raise TypeError("manifest_payload must be a mapping")
+    if manifest_payload.get("schema_version") != "quarantine-manifest-v1":
+        raise ValueError("manifest must use schema_version quarantine-manifest-v1")
+    raw_records = manifest_payload.get("records")
+    if not isinstance(raw_records, list):
+        raise ValueError("manifest records must be a list")
+    records = tuple(quarantined_response_from_dict(record) for record in raw_records)
+    result = cleanup_expired_quarantine(records, as_of)
+    return {
+        "schema_version": "quarantine-cleanup-v1",
+        "source_schema_version": "quarantine-manifest-v1",
+        "as_of": as_of.isoformat(),
+        "record_count": len(records),
+        "deleted_count": result.deleted_count,
+        "deleted_bytes": result.deleted_bytes,
+        "missing_count": result.missing_count,
+        "failed_count": len(result.failed_paths),
+        "failed_paths": [str(path) for path in result.failed_paths],
+    }
+
+
 def _quarantine_filename(metadata: SourceResponseMetadata, reason_code: ErrorCode) -> str:
     if type(metadata) is not SourceResponseMetadata:
         raise TypeError("metadata must be SourceResponseMetadata")
@@ -185,3 +256,31 @@ def _quarantine_filename(metadata: SourceResponseMetadata, reason_code: ErrorCod
 
 def _is_aware(value: datetime) -> bool:
     return value.tzinfo is not None and value.utcoffset() is not None
+
+
+def _parse_aware_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if not _is_aware(parsed):
+        raise ValueError("datetime fields must be timezone-aware")
+    return parsed
+
+
+def _required_mapping(payload: Mapping[str, object], field_name: str) -> Mapping[str, object]:
+    value = payload.get(field_name)
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{field_name} must be an object")
+    return value
+
+
+def _required_string(payload: Mapping[str, object], field_name: str) -> str:
+    value = payload.get(field_name)
+    if type(value) is not str or not value:
+        raise ValueError(f"{field_name} must be a string")
+    return value
+
+
+def _required_int(payload: Mapping[str, object], field_name: str) -> int:
+    value = payload.get(field_name)
+    if type(value) is not int:
+        raise ValueError(f"{field_name} must be an integer")
+    return value

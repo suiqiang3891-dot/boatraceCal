@@ -28,6 +28,7 @@ from boatrace_cal.ingestion.odds import (
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.ingestion.sources import cleanup_expired_quarantine_manifest
 from boatrace_cal.jobs.contracts import JobStatus
 from boatrace_cal.jobs.ledger import (
     FileJobLedger,
@@ -115,6 +116,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_job_ledger_record_failure(args)
     if args.command == "odds-change-alert":
         return _run_odds_change_alert(args)
+    if args.command == "quarantine-cleanup":
+        return _run_quarantine_cleanup(args)
     if args.command == "frequency-model-candidates":
         return _run_frequency_model_candidates(args)
     if args.command == "market-implied-candidates":
@@ -271,6 +274,14 @@ def _build_parser() -> argparse.ArgumentParser:
     odds_change_alert.add_argument("--alert-as-of", required=True)
     odds_change_alert.add_argument("--min-relative-change", default="0.10")
     odds_change_alert.add_argument("--output", required=True, type=Path)
+
+    quarantine_cleanup = subparsers.add_parser(
+        "quarantine-cleanup",
+        help="Delete expired quarantined source responses and write an audit report.",
+    )
+    quarantine_cleanup.add_argument("--manifest", required=True, type=Path)
+    quarantine_cleanup.add_argument("--as-of", required=True)
+    quarantine_cleanup.add_argument("--output", required=True, type=Path)
 
     backtest = subparsers.add_parser(
         "backtest-report",
@@ -705,6 +716,16 @@ def _run_odds_change_alert(args: argparse.Namespace) -> int:
         ),
     )
     _write_json(args.output, odds_change_alert_report_to_dict(report))
+    return 0
+
+
+def _run_quarantine_cleanup(args: argparse.Namespace) -> int:
+    manifest_payload = json.loads(args.manifest.read_text(encoding="utf-8"))
+    payload = cleanup_expired_quarantine_manifest(
+        manifest_payload,
+        as_of=date.fromisoformat(args.as_of),
+    )
+    _write_json(args.output, payload)
     return 0
 
 

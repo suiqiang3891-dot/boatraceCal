@@ -607,6 +607,74 @@ def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> N
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_quarantine_cleanup_command_writes_audit_report(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "quarantine" / "manifest.json"
+    output_path = tmp_path / "quarantine" / "cleanup.json"
+    expired_path = tmp_path / "quarantine" / "expired.html"
+    retained_path = tmp_path / "quarantine" / "retained.html"
+    manifest_path.parent.mkdir(parents=True)
+    expired_path.write_bytes(b"expired")
+    retained_path.write_bytes(b"retained")
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "quarantine-manifest-v1",
+                "records": [
+                    {
+                        "metadata": {
+                            "url": "https://example.test/expired",
+                            "fetched_at": "2026-06-01T04:00:00+00:00",
+                            "http_status": 503,
+                            "content_sha256": "a" * 64,
+                            "parser_version": "parser-v1",
+                        },
+                        "saved_path": str(expired_path),
+                        "reason_code": "SOURCE_UNAVAILABLE",
+                        "retained_until": "2026-06-10",
+                    },
+                    {
+                        "metadata": {
+                            "url": "https://example.test/retained",
+                            "fetched_at": "2026-06-01T04:00:00+00:00",
+                            "http_status": 503,
+                            "content_sha256": "b" * 64,
+                            "parser_version": "parser-v1",
+                        },
+                        "saved_path": str(retained_path),
+                        "reason_code": "SOURCE_UNAVAILABLE",
+                        "retained_until": "2026-07-10",
+                    },
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "quarantine-cleanup",
+            "--manifest",
+            str(manifest_path),
+            "--as-of",
+            "2026-06-30",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "quarantine-cleanup-v1"
+    assert payload["deleted_count"] == 1
+    assert payload["deleted_bytes"] == 7
+    assert payload["failed_paths"] == []
+    assert not expired_path.exists()
+    assert retained_path.read_bytes() == b"retained"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     recommendations_path = tmp_path / "recommendations.csv"
     results_path = tmp_path / "results.csv"
