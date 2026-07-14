@@ -44,6 +44,21 @@ boatrace-cal snapshot-job-plan `
 
 后续真实抓取或 Windows 任务计划只应消费这个计划，不应重新推导 T-10 冻结和 T-5 告警规则。
 
+## 选择当前窗口到期任务
+
+如果 Windows 任务计划按固定频率触发，可以先用 `snapshot-job-due` 从整天计划中筛出当前窗口内应执行的任务：
+
+```powershell
+boatrace-cal snapshot-job-due `
+  --plan .\artifacts\jobs\snapshot-plan.json `
+  --now 2026-06-23T04:14:00+00:00 `
+  --lookahead-minutes 1 `
+  --past-tolerance-minutes 0 `
+  --output .\artifacts\jobs\snapshot-due.json
+```
+
+输出 JSON 的 `schema_version` 为 `snapshot-job-due-v1`，会保留原始任务对象，并额外记录本次筛选的 `window_start`、`window_end` 和 `job_count`。
+
 ## T-5 赔率变化告警
 
 T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：

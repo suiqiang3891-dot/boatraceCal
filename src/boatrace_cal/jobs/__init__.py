@@ -8,6 +8,7 @@ from boatrace_cal.jobs.snapshot_plan import (
     build_prerace_snapshot_plan,
     export_snapshot_plan_json,
     load_race_starts_csv,
+    select_due_snapshot_jobs,
     snapshot_plan_to_dict,
 )
 
@@ -21,6 +22,7 @@ __all__ = [
     "build_prerace_snapshot_plan",
     "export_snapshot_plan_json",
     "load_race_starts_csv",
+    "select_due_snapshot_jobs",
     "snapshot_plan_to_dict",
     "transition",
 ]

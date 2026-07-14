@@ -31,6 +31,7 @@ from boatrace_cal.jobs.snapshot_plan import (
     build_prerace_snapshot_plan,
     export_snapshot_plan_json,
     load_race_starts_csv,
+    select_due_snapshot_jobs,
 )
 from boatrace_cal.models.evaluation import (
     evaluate_probability_candidates,
@@ -91,6 +92,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_odds_quality_report(args)
     if args.command == "snapshot-job-plan":
         return _run_snapshot_job_plan(args)
+    if args.command == "snapshot-job-due":
+        return _run_snapshot_job_due(args)
     if args.command == "odds-change-alert":
         return _run_odds_change_alert(args)
     if args.command == "frequency-model-candidates":
@@ -168,6 +171,16 @@ def _build_parser() -> argparse.ArgumentParser:
     snapshot_plan.add_argument("--source", required=True)
     snapshot_plan.add_argument("--data-type", default="odds")
     snapshot_plan.add_argument("--output", required=True, type=Path)
+
+    snapshot_due = subparsers.add_parser(
+        "snapshot-job-due",
+        help="Select snapshot plan jobs due inside an explicit execution window.",
+    )
+    snapshot_due.add_argument("--plan", required=True, type=Path)
+    snapshot_due.add_argument("--now", required=True)
+    snapshot_due.add_argument("--lookahead-minutes", default=0, type=int)
+    snapshot_due.add_argument("--past-tolerance-minutes", default=0, type=int)
+    snapshot_due.add_argument("--output", required=True, type=Path)
 
     odds_change_alert = subparsers.add_parser(
         "odds-change-alert",
@@ -508,6 +521,18 @@ def _run_snapshot_job_plan(args: argparse.Namespace) -> int:
         data_type=args.data_type,
     )
     export_snapshot_plan_json(plan, args.output)
+    return 0
+
+
+def _run_snapshot_job_due(args: argparse.Namespace) -> int:
+    payload = json.loads(args.plan.read_text(encoding="utf-8"))
+    due_payload = select_due_snapshot_jobs(
+        payload,
+        now=_parse_datetime(args.now, "now"),
+        lookahead=timedelta(minutes=args.lookahead_minutes),
+        past_tolerance=timedelta(minutes=args.past_tolerance_minutes),
+    )
+    _write_json(args.output, due_payload)
     return 0
 
 

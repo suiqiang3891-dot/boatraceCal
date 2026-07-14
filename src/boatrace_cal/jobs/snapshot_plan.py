@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import csv
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -128,6 +128,38 @@ def snapshot_plan_to_dict(items: Iterable[SnapshotPlanItem]) -> dict[str, Any]:
     }
 
 
+def select_due_snapshot_jobs(
+    plan_payload: Mapping[str, Any],
+    *,
+    now: datetime,
+    lookahead: timedelta,
+    past_tolerance: timedelta = timedelta(0),
+) -> dict[str, Any]:
+    """Return plan jobs scheduled inside the explicit execution window."""
+
+    if plan_payload.get("schema_version") != "snapshot-job-plan-v1":
+        raise ValueError("snapshot plan must use schema_version snapshot-job-plan-v1")
+    if type(now) is not datetime or now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    if lookahead < timedelta(0):
+        raise ValueError("lookahead must not be negative")
+    if past_tolerance < timedelta(0):
+        raise ValueError("past_tolerance must not be negative")
+
+    window_start = now - past_tolerance
+    window_end = now + lookahead
+    jobs = tuple(_due_jobs(plan_payload.get("jobs"), window_start, window_end))
+    return {
+        "schema_version": "snapshot-job-due-v1",
+        "source_schema_version": "snapshot-job-plan-v1",
+        "now": now.isoformat(),
+        "window_start": window_start.isoformat(),
+        "window_end": window_end.isoformat(),
+        "job_count": len(jobs),
+        "jobs": jobs,
+    }
+
+
 def export_snapshot_plan_json(items: Iterable[SnapshotPlanItem], output_path: Path) -> None:
     """Write the snapshot plan as newline-terminated UTF-8 JSON."""
 
@@ -165,6 +197,23 @@ def _parse_aware_datetime(value: str, field_name: str) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError(f"{field_name} must be timezone-aware")
     return parsed
+
+
+def _due_jobs(
+    raw_jobs: object,
+    window_start: datetime,
+    window_end: datetime,
+) -> tuple[dict[str, Any], ...]:
+    if not isinstance(raw_jobs, list):
+        raise ValueError("snapshot plan jobs must be a list")
+    jobs: list[dict[str, Any]] = []
+    for raw_job in raw_jobs:
+        if not isinstance(raw_job, dict):
+            raise ValueError("snapshot plan jobs must contain objects")
+        scheduled_at = _parse_aware_datetime(str(raw_job.get("scheduled_at")), "scheduled_at")
+        if window_start <= scheduled_at <= window_end:
+            jobs.append(dict(raw_job))
+    return tuple(sorted(jobs, key=lambda job: str(job["scheduled_at"])))
 
 
 def _race_start_sort_key(race_start: RaceStart) -> tuple[datetime, date, str, int]:

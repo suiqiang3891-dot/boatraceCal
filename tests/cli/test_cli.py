@@ -253,6 +253,58 @@ def test_snapshot_job_plan_command_writes_timed_prerace_jobs(tmp_path: Path) -> 
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_snapshot_job_due_command_writes_due_window_jobs(tmp_path: Path) -> None:
+    race_starts_path = tmp_path / "inputs" / "race-starts.csv"
+    plan_path = tmp_path / "jobs" / "snapshot-plan.json"
+    due_path = tmp_path / "jobs" / "snapshot-due.json"
+    race_starts_path.parent.mkdir(parents=True)
+    race_starts_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,starts_at",
+                "2026-06-23,05,1,2026-06-23T04:30:00+00:00",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    assert (
+        main(
+            (
+                "snapshot-job-plan",
+                "--race-starts",
+                str(race_starts_path),
+                "--source",
+                "official",
+                "--output",
+                str(plan_path),
+            )
+        )
+        == 0
+    )
+
+    exit_code = main(
+        (
+            "snapshot-job-due",
+            "--plan",
+            str(plan_path),
+            "--now",
+            "2026-06-23T04:14:00+00:00",
+            "--lookahead-minutes",
+            "1",
+            "--output",
+            str(due_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(due_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "snapshot-job-due-v1"
+    assert payload["job_count"] == 1
+    assert payload["jobs"][0]["snapshot_target"] == "T15"
+    assert due_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> None:
     odds_path = tmp_path / "market" / "odds.csv"
     output_path = tmp_path / "reports" / "odds-change-alert.json"

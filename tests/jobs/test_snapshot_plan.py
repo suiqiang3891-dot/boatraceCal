@@ -10,6 +10,7 @@ from boatrace_cal.jobs.snapshot_plan import (
     SnapshotDecisionMode,
     build_prerace_snapshot_plan,
     load_race_starts_csv,
+    select_due_snapshot_jobs,
     snapshot_plan_to_dict,
 )
 
@@ -102,6 +103,32 @@ def test_snapshot_plan_sorts_races_before_targets() -> None:
         "official|05|2026-06-23|1|odds|T15",
     ]
     assert plan[4].job_key.key == "official|05|2026-06-23|2|odds|T30"
+
+
+def test_select_due_snapshot_jobs_uses_explicit_execution_window() -> None:
+    race_start = RaceStart(
+        race_date=date(2026, 6, 23),
+        venue=VenueCode("05"),
+        race_no=1,
+        starts_at=datetime(2026, 6, 23, 4, 30, tzinfo=timezone.utc),
+    )
+    plan_payload = snapshot_plan_to_dict(
+        build_prerace_snapshot_plan([race_start], source="official")
+    )
+
+    due_payload = select_due_snapshot_jobs(
+        plan_payload,
+        now=datetime(2026, 6, 23, 4, 14, tzinfo=timezone.utc),
+        lookahead=timedelta(minutes=1),
+        past_tolerance=timedelta(minutes=0),
+    )
+
+    assert due_payload["schema_version"] == "snapshot-job-due-v1"
+    assert due_payload["source_schema_version"] == "snapshot-job-plan-v1"
+    assert due_payload["window_start"] == "2026-06-23T04:14:00+00:00"
+    assert due_payload["window_end"] == "2026-06-23T04:15:00+00:00"
+    assert due_payload["job_count"] == 1
+    assert due_payload["jobs"][0]["job_key"] == "official|05|2026-06-23|1|odds|T15"
 
 
 def test_race_start_requires_timezone_aware_start_time() -> None:
