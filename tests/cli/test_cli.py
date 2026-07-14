@@ -430,6 +430,55 @@ def test_job_ledger_register_due_command_is_idempotent(tmp_path: Path) -> None:
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_job_ledger_mark_missed_command_records_missed_window(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "jobs" / "ledger.json"
+    plan_path = tmp_path / "jobs" / "snapshot-plan.json"
+    output_path = tmp_path / "jobs" / "missed.json"
+    plan_path.parent.mkdir(parents=True)
+    plan_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "snapshot-job-plan-v1",
+                "jobs": [
+                    {
+                        "job_key": "official|05|2026-06-23|1|odds|T30",
+                        "scheduled_at": "2026-06-23T04:00:00+00:00",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "job-ledger-mark-missed",
+            "--ledger",
+            str(ledger_path),
+            "--plan",
+            str(plan_path),
+            "--now",
+            "2026-06-23T04:05:00+00:00",
+            "--allowed-lateness-minutes",
+            "1",
+            "--checkpoint",
+            "missed-window-20260623T0405Z",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "job-ledger-missed-windows-v1"
+    assert payload["missed_count"] == 1
+    assert payload["jobs"][0]["status"] == "skipped"
+    assert payload["jobs"][0]["last_error_code"] == "MISSED_WINDOW"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> None:
     odds_path = tmp_path / "market" / "odds.csv"
     output_path = tmp_path / "reports" / "odds-change-alert.json"

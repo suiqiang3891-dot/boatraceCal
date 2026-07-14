@@ -4,6 +4,7 @@ from boatrace_cal.jobs.contracts import JobKey, JobStatus, SnapshotTarget, trans
 from boatrace_cal.jobs.ledger import (
     FileJobLedger,
     JobLedgerRecord,
+    mark_missed_snapshot_jobs,
     parse_job_key,
     register_due_jobs,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "build_prerace_snapshot_plan",
     "export_snapshot_plan_json",
     "load_race_starts_csv",
+    "mark_missed_snapshot_jobs",
     "parse_job_key",
     "register_due_jobs",
     "select_due_snapshot_jobs",

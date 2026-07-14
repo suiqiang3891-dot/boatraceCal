@@ -93,6 +93,20 @@ boatrace-cal job-ledger-register-due `
   --output .\artifacts\jobs\register-due.json
 ```
 
+周期任务还应定期标记已经超过有效窗口且未完成的快照，避免后续补造赛前赔率：
+
+```powershell
+boatrace-cal job-ledger-mark-missed `
+  --ledger .\artifacts\jobs\ledger.json `
+  --plan .\artifacts\jobs\snapshot-plan.json `
+  --now 2026-06-23T04:17:00+00:00 `
+  --allowed-lateness-minutes 1 `
+  --checkpoint missed-window-20260623T0417Z `
+  --output .\artifacts\jobs\missed-window.json
+```
+
+该命令会把过窗且未进入终态的任务推进到 `skipped`，并记录 `last_error_code: MISSED_WINDOW`。已 `succeeded`、`failed` 或 `skipped` 的任务不会被覆盖。
+
 ## T-5 赔率变化告警
 
 T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：

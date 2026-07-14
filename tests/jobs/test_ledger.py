@@ -6,6 +6,7 @@ from boatrace_cal.domain.races import VenueCode
 from boatrace_cal.jobs.contracts import JobKey, JobStatus, SnapshotTarget
 from boatrace_cal.jobs.ledger import (
     FileJobLedger,
+    mark_missed_snapshot_jobs,
     parse_job_key,
     register_due_jobs,
 )
@@ -133,3 +134,56 @@ def test_register_due_jobs_is_idempotent(tmp_path) -> None:
     assert record is not None
     assert record.status is JobStatus.PENDING
     assert record.checkpoint == "snapshot-due-20260623T0414Z"
+
+
+def test_mark_missed_snapshot_jobs_skips_expired_unfinished_jobs(tmp_path) -> None:
+    ledger = FileJobLedger(tmp_path / "jobs.json")
+    plan_payload = {
+        "schema_version": "snapshot-job-plan-v1",
+        "jobs": [
+            {
+                "job_key": "official|05|2026-06-23|1|odds|T30",
+                "scheduled_at": "2026-06-23T04:00:00+00:00",
+            },
+            {
+                "job_key": "official|05|2026-06-23|1|odds|T15",
+                "scheduled_at": "2026-06-23T04:15:00+00:00",
+            },
+            {
+                "job_key": "official|05|2026-06-23|1|odds|T10",
+                "scheduled_at": "2026-06-23T04:20:00+00:00",
+            },
+        ],
+    }
+    ledger.record(
+        parse_job_key("official|05|2026-06-23|1|odds|T30"),
+        JobStatus.PENDING,
+        updated_at=datetime(2026, 6, 23, 3, 59, tzinfo=timezone.utc),
+    )
+
+    payload = mark_missed_snapshot_jobs(
+        ledger,
+        plan_payload,
+        now=datetime(2026, 6, 23, 4, 17, tzinfo=timezone.utc),
+        allowed_lateness_minutes=1,
+        checkpoint="missed-window-20260623T0417Z",
+    )
+
+    assert payload["schema_version"] == "job-ledger-missed-windows-v1"
+    assert payload["missed_count"] == 2
+    assert payload["not_yet_due_count"] == 1
+    assert [job["job_key"] for job in payload["jobs"]] == [
+        "official|05|2026-06-23|1|odds|T30",
+        "official|05|2026-06-23|1|odds|T15",
+    ]
+    t30 = ledger.get(parse_job_key("official|05|2026-06-23|1|odds|T30"))
+    t15 = ledger.get(parse_job_key("official|05|2026-06-23|1|odds|T15"))
+    t10 = ledger.get(parse_job_key("official|05|2026-06-23|1|odds|T10"))
+    assert t30 is not None
+    assert t30.status is JobStatus.SKIPPED
+    assert t30.last_error_code == "MISSED_WINDOW"
+    assert t30.checkpoint == "missed-window-20260623T0417Z"
+    assert t15 is not None
+    assert t15.status is JobStatus.SKIPPED
+    assert t15.last_error_code == "MISSED_WINDOW"
+    assert t10 is None

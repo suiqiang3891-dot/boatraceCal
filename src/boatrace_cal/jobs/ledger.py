@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 import json
 from pathlib import Path
-from collections.abc import Mapping
 
+from boatrace_cal.errors import ErrorCode
 from boatrace_cal.domain.races import VenueCode
 from boatrace_cal.jobs.contracts import JobKey, JobStatus, SnapshotTarget, transition
 
@@ -252,6 +253,68 @@ def register_due_jobs(
     }
 
 
+def mark_missed_snapshot_jobs(
+    ledger: FileJobLedger,
+    plan_payload: Mapping[str, object],
+    *,
+    now: datetime,
+    allowed_lateness_minutes: int,
+    checkpoint: str | None = None,
+) -> dict[str, object]:
+    """Mark expired, unfinished snapshot plan jobs as skipped MISSED_WINDOW."""
+
+    if type(ledger) is not FileJobLedger:
+        raise TypeError("ledger must be a FileJobLedger")
+    if plan_payload.get("schema_version") != "snapshot-job-plan-v1":
+        raise ValueError("plan payload must use schema_version snapshot-job-plan-v1")
+    if type(now) is not datetime or _is_naive(now):
+        raise ValueError("now must be timezone-aware")
+    if type(allowed_lateness_minutes) is not int or allowed_lateness_minutes < 0:
+        raise ValueError("allowed_lateness_minutes must be a non-negative integer")
+    raw_jobs = plan_payload.get("jobs")
+    if not isinstance(raw_jobs, list):
+        raise ValueError("plan payload jobs must be a list")
+
+    missed_records: list[dict[str, object]] = []
+    skipped_terminal_count = 0
+    not_yet_due_count = 0
+    for raw_job in raw_jobs:
+        if not isinstance(raw_job, dict):
+            raise ValueError("plan payload jobs must contain objects")
+        scheduled_at = _parse_aware_datetime(_required_string(raw_job, "scheduled_at"))
+        if (now - scheduled_at).total_seconds() <= allowed_lateness_minutes * 60:
+            not_yet_due_count += 1
+            continue
+
+        job_key = parse_job_key(_required_string(raw_job, "job_key"))
+        current = ledger.get(job_key)
+        if current is not None and current.status in {
+            JobStatus.SUCCEEDED,
+            JobStatus.FAILED,
+            JobStatus.SKIPPED,
+        }:
+            skipped_terminal_count += 1
+            continue
+
+        record = _skip_missed_window(
+            ledger,
+            job_key,
+            current,
+            updated_at=now,
+            checkpoint=checkpoint,
+        )
+        missed_records.append(record.to_dict())
+
+    return {
+        "schema_version": "job-ledger-missed-windows-v1",
+        "source_schema_version": "snapshot-job-plan-v1",
+        "missed_count": len(missed_records),
+        "skipped_terminal_count": skipped_terminal_count,
+        "not_yet_due_count": not_yet_due_count,
+        "jobs": missed_records,
+    }
+
+
 def _record_from_parts(
     *,
     job_key: JobKey,
@@ -274,6 +337,32 @@ def _record_from_parts(
         checkpoint=_strip_optional(checkpoint),
         parser_version=_strip_optional(parser_version),
         artifact_id=_strip_optional(artifact_id),
+    )
+
+
+def _skip_missed_window(
+    ledger: FileJobLedger,
+    job_key: JobKey,
+    current: JobLedgerRecord | None,
+    *,
+    updated_at: datetime,
+    checkpoint: str | None,
+) -> JobLedgerRecord:
+    if current is None:
+        ledger.record(job_key, JobStatus.PENDING, updated_at=updated_at, checkpoint=checkpoint)
+        current = ledger.get(job_key)
+    if current is None:
+        raise RuntimeError("ledger failed to create pending record")
+    if current.status is JobStatus.PENDING:
+        ledger.record(job_key, JobStatus.RUNNING, updated_at=updated_at)
+    elif current.status is JobStatus.RETRY_WAIT:
+        ledger.record(job_key, JobStatus.RUNNING, updated_at=updated_at)
+    return ledger.record(
+        job_key,
+        JobStatus.SKIPPED,
+        updated_at=updated_at,
+        last_error_code=ErrorCode.MISSED_WINDOW.value,
+        checkpoint=checkpoint,
     )
 
 
