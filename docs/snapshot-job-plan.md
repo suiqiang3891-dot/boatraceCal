@@ -59,6 +59,29 @@ boatrace-cal snapshot-job-due `
 
 输出 JSON 的 `schema_version` 为 `snapshot-job-due-v1`，会保留原始任务对象，并额外记录本次筛选的 `window_start`、`window_end` 和 `job_count`。
 
+## 记录任务账本
+
+快照执行器在真正抓取前后应把状态写入本地任务账本。账本使用 `job_key` 幂等定位同一任务，并记录尝试次数、错误码、下次重试时间、checkpoint、解析器版本和产物标识。
+
+```powershell
+boatrace-cal job-ledger-record `
+  --ledger .\artifacts\jobs\ledger.json `
+  --job-key "official|05|2026-06-23|1|odds|T15" `
+  --status pending `
+  --updated-at 2026-06-23T04:14:00+00:00 `
+  --checkpoint snapshot-plan-20260623 `
+  --output .\artifacts\jobs\job-status.json
+```
+
+开始执行时把状态推进为 `running`；失败可推进为 `retry_wait`、`failed` 或 `skipped`；成功推进为 `succeeded` 并写入 `--artifact-id`。非法状态回退会被拒绝，例如 `succeeded` 不能回到 `running`。
+
+```powershell
+boatrace-cal job-ledger-get `
+  --ledger .\artifacts\jobs\ledger.json `
+  --job-key "official|05|2026-06-23|1|odds|T15" `
+  --output .\artifacts\jobs\job-status.json
+```
+
 ## T-5 赔率变化告警
 
 T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：

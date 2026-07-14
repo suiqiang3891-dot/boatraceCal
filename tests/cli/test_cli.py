@@ -305,6 +305,69 @@ def test_snapshot_job_due_command_writes_due_window_jobs(tmp_path: Path) -> None
     assert due_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_job_ledger_commands_record_and_read_job_status(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "jobs" / "ledger.json"
+    output_path = tmp_path / "api" / "job.json"
+    job_key = "official|05|2026-06-23|1|odds|T15"
+
+    pending_exit_code = main(
+        (
+            "job-ledger-record",
+            "--ledger",
+            str(ledger_path),
+            "--job-key",
+            job_key,
+            "--status",
+            "pending",
+            "--updated-at",
+            "2026-06-23T04:14:00+00:00",
+            "--checkpoint",
+            "snapshot-plan-20260623",
+            "--output",
+            str(output_path),
+        )
+    )
+    running_exit_code = main(
+        (
+            "job-ledger-record",
+            "--ledger",
+            str(ledger_path),
+            "--job-key",
+            job_key,
+            "--status",
+            "running",
+            "--updated-at",
+            "2026-06-23T04:15:00+00:00",
+            "--parser-version",
+            "odds-v1",
+            "--output",
+            str(output_path),
+        )
+    )
+    get_exit_code = main(
+        (
+            "job-ledger-get",
+            "--ledger",
+            str(ledger_path),
+            "--job-key",
+            job_key,
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert pending_exit_code == 0
+    assert running_exit_code == 0
+    assert get_exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["job_key"] == job_key
+    assert payload["status"] == "running"
+    assert payload["attempt_count"] == 1
+    assert payload["checkpoint"] == "snapshot-plan-20260623"
+    assert payload["parser_version"] == "odds-v1"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> None:
     odds_path = tmp_path / "market" / "odds.csv"
     output_path = tmp_path / "reports" / "odds-change-alert.json"

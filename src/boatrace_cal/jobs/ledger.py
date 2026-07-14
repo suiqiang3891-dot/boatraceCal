@@ -1,0 +1,279 @@
+"""File-backed job ledger for auditable local collection workflows."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime
+import json
+from pathlib import Path
+
+from boatrace_cal.domain.races import VenueCode
+from boatrace_cal.jobs.contracts import JobKey, JobStatus, SnapshotTarget, transition
+
+
+@dataclass(frozen=True, slots=True)
+class JobLedgerRecord:
+    """Persisted current state for one auditable collection job."""
+
+    job_key: JobKey
+    status: JobStatus
+    attempt_count: int
+    updated_at: datetime
+    last_error_code: str | None = None
+    next_retry_at: datetime | None = None
+    checkpoint: str | None = None
+    parser_version: str | None = None
+    artifact_id: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.job_key) is not JobKey:
+            raise TypeError("job_key must be a JobKey")
+        if type(self.status) is not JobStatus:
+            raise TypeError("status must be a JobStatus")
+        if type(self.attempt_count) is not int or self.attempt_count < 0:
+            raise ValueError("attempt_count must be a non-negative integer")
+        if type(self.updated_at) is not datetime or _is_naive(self.updated_at):
+            raise ValueError("updated_at must be timezone-aware")
+        if self.next_retry_at is not None and (
+            type(self.next_retry_at) is not datetime or _is_naive(self.next_retry_at)
+        ):
+            raise ValueError("next_retry_at must be timezone-aware")
+        for field_name in (
+            "last_error_code",
+            "checkpoint",
+            "parser_version",
+            "artifact_id",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and (type(value) is not str or not value.strip()):
+                raise ValueError(f"{field_name} must be a non-blank string")
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "job_key": self.job_key.key,
+            "source": self.job_key.source,
+            "venue": str(self.job_key.venue),
+            "race_date": self.job_key.race_date.isoformat(),
+            "race_no": self.job_key.race_no,
+            "data_type": self.job_key.data_type,
+            "snapshot_target": self.job_key.snapshot_target.value,
+            "status": self.status.value,
+            "attempt_count": self.attempt_count,
+            "updated_at": self.updated_at.isoformat(),
+            "last_error_code": self.last_error_code,
+            "next_retry_at": None
+            if self.next_retry_at is None
+            else self.next_retry_at.isoformat(),
+            "checkpoint": self.checkpoint,
+            "parser_version": self.parser_version,
+            "artifact_id": self.artifact_id,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, object]) -> "JobLedgerRecord":
+        return cls(
+            job_key=parse_job_key(_required_string(payload, "job_key")),
+            status=JobStatus(_required_string(payload, "status")),
+            attempt_count=_required_int(payload, "attempt_count"),
+            updated_at=_parse_aware_datetime(_required_string(payload, "updated_at")),
+            last_error_code=_optional_string(payload, "last_error_code"),
+            next_retry_at=_optional_datetime(payload, "next_retry_at"),
+            checkpoint=_optional_string(payload, "checkpoint"),
+            parser_version=_optional_string(payload, "parser_version"),
+            artifact_id=_optional_string(payload, "artifact_id"),
+        )
+
+
+class FileJobLedger:
+    """Small JSON-file job ledger for local scheduler integration."""
+
+    def __init__(self, path: Path | str) -> None:
+        self._path = Path(path)
+
+    def get(self, job_key: JobKey) -> JobLedgerRecord | None:
+        jobs = self._load_jobs()
+        payload = jobs.get(job_key.key)
+        if payload is None:
+            return None
+        return JobLedgerRecord.from_dict(payload)
+
+    def record(
+        self,
+        job_key: JobKey,
+        status: JobStatus,
+        *,
+        updated_at: datetime,
+        last_error_code: str | None = None,
+        next_retry_at: datetime | None = None,
+        checkpoint: str | None = None,
+        parser_version: str | None = None,
+        artifact_id: str | None = None,
+    ) -> JobLedgerRecord:
+        if type(job_key) is not JobKey:
+            raise TypeError("job_key must be a JobKey")
+        if type(status) is not JobStatus:
+            raise TypeError("status must be a JobStatus")
+
+        jobs = self._load_jobs()
+        current_payload = jobs.get(job_key.key)
+        current = (
+            None
+            if current_payload is None
+            else JobLedgerRecord.from_dict(current_payload)
+        )
+        if current is None:
+            if status is not JobStatus.PENDING:
+                raise ValueError("new ledger jobs must start as pending")
+            attempt_count = 0
+            merged = _record_from_parts(
+                job_key=job_key,
+                status=status,
+                attempt_count=attempt_count,
+                updated_at=updated_at,
+                last_error_code=last_error_code,
+                next_retry_at=next_retry_at,
+                checkpoint=checkpoint,
+                parser_version=parser_version,
+                artifact_id=artifact_id,
+            )
+        else:
+            if status is current.status:
+                return current
+            transition(current.status, status)
+            attempt_count = current.attempt_count + (
+                1 if status is JobStatus.RUNNING else 0
+            )
+            merged = _record_from_parts(
+                job_key=job_key,
+                status=status,
+                attempt_count=attempt_count,
+                updated_at=updated_at,
+                last_error_code=_coalesce(last_error_code, current.last_error_code),
+                next_retry_at=_coalesce(next_retry_at, current.next_retry_at),
+                checkpoint=_coalesce(checkpoint, current.checkpoint),
+                parser_version=_coalesce(parser_version, current.parser_version),
+                artifact_id=_coalesce(artifact_id, current.artifact_id),
+            )
+
+        jobs[job_key.key] = merged.to_dict()
+        self._write_jobs(jobs)
+        return merged
+
+    def _load_jobs(self) -> dict[str, dict[str, object]]:
+        if not self._path.exists():
+            return {}
+        payload = json.loads(self._path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("job ledger must be a JSON object")
+        if payload.get("schema_version") != "job-ledger-v1":
+            raise ValueError("job ledger must use schema_version job-ledger-v1")
+        jobs = payload.get("jobs")
+        if not isinstance(jobs, dict):
+            raise ValueError("job ledger jobs must be an object")
+        normalized: dict[str, dict[str, object]] = {}
+        for key, value in jobs.items():
+            if not isinstance(key, str) or not isinstance(value, dict):
+                raise ValueError("job ledger jobs must map keys to objects")
+            normalized[key] = dict(value)
+        return normalized
+
+    def _write_jobs(self, jobs: dict[str, dict[str, object]]) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"schema_version": "job-ledger-v1", "jobs": jobs}
+        self._path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+
+def parse_job_key(value: str) -> JobKey:
+    """Parse the canonical pipe-separated job key string."""
+
+    parts = value.split("|")
+    if len(parts) != 6:
+        raise ValueError("job key must have 6 pipe-separated parts")
+    source, venue, race_date, race_no, data_type, snapshot_target = parts
+    return JobKey(
+        source=source,
+        venue=VenueCode(venue),
+        race_date=date.fromisoformat(race_date),
+        race_no=None if race_no == "*" else int(race_no),
+        data_type=data_type,
+        snapshot_target=SnapshotTarget(snapshot_target),
+    )
+
+
+def _record_from_parts(
+    *,
+    job_key: JobKey,
+    status: JobStatus,
+    attempt_count: int,
+    updated_at: datetime,
+    last_error_code: str | None,
+    next_retry_at: datetime | None,
+    checkpoint: str | None,
+    parser_version: str | None,
+    artifact_id: str | None,
+) -> JobLedgerRecord:
+    return JobLedgerRecord(
+        job_key=job_key,
+        status=status,
+        attempt_count=attempt_count,
+        updated_at=updated_at,
+        last_error_code=_strip_optional(last_error_code),
+        next_retry_at=next_retry_at,
+        checkpoint=_strip_optional(checkpoint),
+        parser_version=_strip_optional(parser_version),
+        artifact_id=_strip_optional(artifact_id),
+    )
+
+
+def _parse_aware_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    if _is_naive(parsed):
+        raise ValueError("datetime fields must be timezone-aware")
+    return parsed
+
+
+def _is_naive(value: datetime) -> bool:
+    return value.tzinfo is None or value.utcoffset() is None
+
+
+def _coalesce[T](value: T | None, fallback: T | None) -> T | None:
+    return fallback if value is None else value
+
+
+def _strip_optional(value: str | None) -> str | None:
+    return None if value is None else value.strip()
+
+
+def _required_string(payload: dict[str, object], field_name: str) -> str:
+    value = payload.get(field_name)
+    if type(value) is not str or not value:
+        raise ValueError(f"{field_name} must be a string")
+    return value
+
+
+def _optional_string(payload: dict[str, object], field_name: str) -> str | None:
+    value = payload.get(field_name)
+    if value is None:
+        return None
+    if type(value) is not str or not value:
+        raise ValueError(f"{field_name} must be a string or null")
+    return value
+
+
+def _required_int(payload: dict[str, object], field_name: str) -> int:
+    value = payload.get(field_name)
+    if type(value) is not int:
+        raise ValueError(f"{field_name} must be an integer")
+    return value
+
+
+def _optional_datetime(payload: dict[str, object], field_name: str) -> datetime | None:
+    value = payload.get(field_name)
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise ValueError(f"{field_name} must be a string or null")
+    return _parse_aware_datetime(value)

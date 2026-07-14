@@ -27,6 +27,8 @@ from boatrace_cal.ingestion.odds import (
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.jobs.contracts import JobStatus
+from boatrace_cal.jobs.ledger import FileJobLedger, parse_job_key
 from boatrace_cal.jobs.snapshot_plan import (
     build_prerace_snapshot_plan,
     export_snapshot_plan_json,
@@ -94,6 +96,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_snapshot_job_plan(args)
     if args.command == "snapshot-job-due":
         return _run_snapshot_job_due(args)
+    if args.command == "job-ledger-record":
+        return _run_job_ledger_record(args)
+    if args.command == "job-ledger-get":
+        return _run_job_ledger_get(args)
     if args.command == "odds-change-alert":
         return _run_odds_change_alert(args)
     if args.command == "frequency-model-candidates":
@@ -181,6 +187,27 @@ def _build_parser() -> argparse.ArgumentParser:
     snapshot_due.add_argument("--lookahead-minutes", default=0, type=int)
     snapshot_due.add_argument("--past-tolerance-minutes", default=0, type=int)
     snapshot_due.add_argument("--output", required=True, type=Path)
+
+    job_ledger_record = subparsers.add_parser(
+        "job-ledger-record",
+        help="Record one auditable job status transition in a local JSON ledger.",
+    )
+    _add_job_ledger_arguments(job_ledger_record)
+    job_ledger_record.add_argument("--status", required=True)
+    job_ledger_record.add_argument("--updated-at", required=True)
+    job_ledger_record.add_argument("--last-error-code")
+    job_ledger_record.add_argument("--next-retry-at")
+    job_ledger_record.add_argument("--checkpoint")
+    job_ledger_record.add_argument("--parser-version")
+    job_ledger_record.add_argument("--artifact-id")
+    job_ledger_record.add_argument("--output", required=True, type=Path)
+
+    job_ledger_get = subparsers.add_parser(
+        "job-ledger-get",
+        help="Read one auditable job status from a local JSON ledger.",
+    )
+    _add_job_ledger_arguments(job_ledger_get)
+    job_ledger_get.add_argument("--output", required=True, type=Path)
 
     odds_change_alert = subparsers.add_parser(
         "odds-change-alert",
@@ -473,6 +500,11 @@ def _add_review_list_request_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", required=True, type=Path)
 
 
+def _add_job_ledger_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--ledger", required=True, type=Path)
+    parser.add_argument("--job-key", required=True)
+
+
 def _run_backtest_report(args: argparse.Namespace) -> int:
     report = run_backtest(
         recommendations=load_recommendations_csv(args.recommendations),
@@ -533,6 +565,31 @@ def _run_snapshot_job_due(args: argparse.Namespace) -> int:
         past_tolerance=timedelta(minutes=args.past_tolerance_minutes),
     )
     _write_json(args.output, due_payload)
+    return 0
+
+
+def _run_job_ledger_record(args: argparse.Namespace) -> int:
+    record = FileJobLedger(args.ledger).record(
+        parse_job_key(args.job_key),
+        JobStatus(args.status),
+        updated_at=_parse_datetime(args.updated_at, "updated-at"),
+        last_error_code=args.last_error_code,
+        next_retry_at=None
+        if args.next_retry_at is None
+        else _parse_datetime(args.next_retry_at, "next-retry-at"),
+        checkpoint=args.checkpoint,
+        parser_version=args.parser_version,
+        artifact_id=args.artifact_id,
+    )
+    _write_json(args.output, record.to_dict())
+    return 0
+
+
+def _run_job_ledger_get(args: argparse.Namespace) -> int:
+    record = FileJobLedger(args.ledger).get(parse_job_key(args.job_key))
+    if record is None:
+        raise ValueError(f"job_key not found: {args.job_key}")
+    _write_json(args.output, record.to_dict())
     return 0
 
 
