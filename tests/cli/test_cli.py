@@ -6,7 +6,9 @@ from pathlib import Path
 import tomllib
 from zipfile import ZipFile
 
+import boatrace_cal.cli as cli_module
 from boatrace_cal.cli import main
+from boatrace_cal.api_adapter import ApiRequest
 from boatrace_cal.domain.recommendations import Decision
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.strategies.csv import load_strategy_candidates_csv
@@ -1222,6 +1224,65 @@ def test_api_request_command_writes_stable_error_response(tmp_path: Path) -> Non
         "path": "/business-dates/2025-01-02/candidates/missing",
     }
     assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
+def test_serve_api_command_starts_dependency_free_http_server(monkeypatch, tmp_path: Path) -> None:
+    report_path = tmp_path / "reports" / "report.json"
+    store_path = tmp_path / "server" / "reviews.json"
+    report_path.parent.mkdir(parents=True)
+    report_path.write_text(
+        json.dumps({"readiness": {"ready": True}, "settlements": []}, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+    )
+    calls: list[dict[str, object]] = []
+
+    def fake_serve_api_http(address, adapter, *, allowed_origin):
+        response = adapter.handle(
+            ApiRequest(method="GET", path="/business-dates/2025-01-02/status")
+        )
+        calls.append(
+            {
+                "address": address,
+                "allowed_origin": allowed_origin,
+                "status_code": response.status_code,
+                "status": response.body["status"],
+            }
+        )
+
+    monkeypatch.setattr(cli_module, "serve_api_http", fake_serve_api_http, raising=False)
+
+    exit_code = cli_module.main(
+        (
+            "serve-api",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8765",
+            "--report-business-date",
+            "2025-01-02",
+            "--report",
+            str(report_path),
+            "--store",
+            str(store_path),
+            "--archive-dir",
+            str(tmp_path / "archives"),
+            "--export-dir",
+            str(tmp_path / "exports"),
+            "--allowed-origin",
+            "http://127.0.0.1:5174",
+        )
+    )
+
+    assert exit_code == 0
+    assert calls == [
+        {
+            "address": ("127.0.0.1", 8765),
+            "allowed_origin": "http://127.0.0.1:5174",
+            "status_code": 200,
+            "status": "ready",
+        }
+    ]
 
 
 def test_confirmed_review_archive_command_freezes_store_checklist(tmp_path: Path) -> None:

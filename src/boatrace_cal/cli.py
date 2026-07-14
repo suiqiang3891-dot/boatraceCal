@@ -11,6 +11,7 @@ from pathlib import Path
 
 from boatrace_cal.api_adapter import ApiRequest, AnalysisApiAdapter
 from boatrace_cal.api_contract import export_openapi_spec_json
+from boatrace_cal.api_server import serve_api_http
 from boatrace_cal.api_services import CandidateQueryService, ReviewWorkflowService
 from boatrace_cal.backtest.export import export_backtest_report_json
 from boatrace_cal.backtest.runner import run_backtest
@@ -111,6 +112,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_export_job_status(args)
     if args.command == "api-request":
         return _run_api_request(args)
+    if args.command == "serve-api":
+        return _run_serve_api(args)
     if args.command == "openapi-spec":
         return _run_openapi_spec(args)
     parser.print_help()
@@ -361,6 +364,31 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path("artifacts/review-exports"),
     )
     api_request.add_argument("--output", required=True, type=Path)
+
+    serve_api = subparsers.add_parser(
+        "serve-api",
+        help="Serve the local dependency-free analysis API over HTTP.",
+    )
+    serve_api.add_argument("--host", default="127.0.0.1")
+    serve_api.add_argument("--port", default=8765, type=int)
+    serve_api.add_argument("--report-business-date", action="append", default=[])
+    serve_api.add_argument("--report", action="append", default=[], type=Path)
+    serve_api.add_argument(
+        "--store",
+        type=Path,
+        default=Path("data/reviews/reviews.json"),
+    )
+    serve_api.add_argument(
+        "--archive-dir",
+        type=Path,
+        default=Path("artifacts/review-archives"),
+    )
+    serve_api.add_argument(
+        "--export-dir",
+        type=Path,
+        default=Path("artifacts/review-exports"),
+    )
+    serve_api.add_argument("--allowed-origin", default="*")
 
     openapi = subparsers.add_parser(
         "openapi-spec",
@@ -787,6 +815,21 @@ def _run_api_request(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_serve_api(args: argparse.Namespace) -> int:
+    adapter = AnalysisApiAdapter(
+        report_paths=_serve_api_report_paths(args),
+        review_store_path=args.store,
+        archive_dir=args.archive_dir,
+        export_dir=args.export_dir,
+    )
+    serve_api_http(
+        (args.host, args.port),
+        adapter,
+        allowed_origin=args.allowed_origin,
+    )
+    return 0
+
+
 def _run_openapi_spec(args: argparse.Namespace) -> int:
     export_openapi_spec_json(args.output)
     return 0
@@ -810,6 +853,12 @@ def _api_request_report_paths(args: argparse.Namespace) -> dict[str, Path | str]
     if args.report_business_date is None or args.report is None:
         raise ValueError("report-business-date and report must be provided together")
     return {args.report_business_date: args.report}
+
+
+def _serve_api_report_paths(args: argparse.Namespace) -> dict[str, Path | str]:
+    if len(args.report_business_date) != len(args.report):
+        raise ValueError("serve-api requires one --report for each --report-business-date")
+    return dict(zip(args.report_business_date, args.report, strict=True))
 
 
 def _read_optional_json_body(path: Path | None) -> object | None:

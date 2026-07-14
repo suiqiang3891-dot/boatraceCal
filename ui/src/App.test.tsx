@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import App from "./App";
 import type { BacktestReport } from "./reportMetrics";
 
@@ -515,4 +515,57 @@ test("App exports backend compatible review JSON for server handoff", () => {
     ],
   });
   expect(exportedText).toMatch(/\n$/);
+});
+
+test("App syncs reviewed rows to a configured local API", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-07-12T04:00:00.000Z"));
+  const fetchMock = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ stored_count: 2 }),
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App apiBaseUrl="http://127.0.0.1:8765" />);
+
+  fireEvent.change(screen.getByLabelText("\u5ba1\u6838\u5907\u6ce8"), {
+    target: { value: "sync to store" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "\u786e\u8ba4\u5019\u9009" }));
+  fireEvent.click(screen.getByRole("button", { name: /20250102-01-02/ }));
+  fireEvent.click(screen.getByRole("button", { name: "\u4eba\u5de5 PASS" }));
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: "\u540c\u6b65\u5ba1\u6838\u5230\u672c\u5730 API" }),
+    );
+  });
+
+  expect(screen.getByText("API saved 2 reviews")).toBeInTheDocument();
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  expect(url).toBe("http://127.0.0.1:8765/reviews/import");
+  expect(init.method).toBe("POST");
+  expect(init.headers).toEqual({ "Content-Type": "application/json" });
+  expect(JSON.parse(init.body as string)).toEqual({
+    reviews: [
+      {
+        decision: "confirmed",
+        notes: "sync to store",
+        race_id: "20250102-01-01",
+        recommendation_id: "sample-rec-hit",
+        reviewed_at: "2026-07-12T04:00:00.000Z",
+        reviewed_by: "browser-analyst",
+        stake_units: 1,
+      },
+      {
+        decision: "pass",
+        notes: "positive_ev / sample",
+        race_id: "20250102-01-02",
+        recommendation_id: "sample-rec-miss",
+        reviewed_at: "2026-07-12T04:00:00.000Z",
+        reviewed_by: "browser-analyst",
+        stake_units: 0,
+      },
+    ],
+  });
 });

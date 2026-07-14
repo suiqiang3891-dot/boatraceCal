@@ -124,6 +124,32 @@ boatrace-cal api-request `
   --output artifacts/api/local-candidate-detail.json
 ```
 
+## 7. 启动本地 HTTP API 并让 UI 直连
+
+当前仍不新增 FastAPI 运行时依赖；浏览器联调可先使用标准库 HTTP server：
+
+```powershell
+boatrace-cal serve-api `
+  --host 127.0.0.1 `
+  --port 8765 `
+  --report-business-date 2025-01-02 `
+  --report examples/sample_backtest/report.json `
+  --store data/reviews/reviews.json `
+  --archive-dir artifacts/review-archives `
+  --export-dir artifacts/review-exports `
+  --allowed-origin http://127.0.0.1:5174
+```
+
+前端配置 API 地址后，顶部会出现“同步审核到本地 API”按钮：
+
+```powershell
+cd ui
+$env:VITE_BOATRACE_API_BASE_URL="http://127.0.0.1:8765"
+npm run dev -- --host 127.0.0.1 --port 5174
+```
+
+该按钮复用“导出审核 JSON”的 `ReviewImportRequest` 契约，POST 到 `/reviews/import`，不会改写回测报告中的模型推荐或结算事实。
+
 ## 风险边界
 
 - 这些命令只演练纸面模拟审核链路，不提供自动下单。

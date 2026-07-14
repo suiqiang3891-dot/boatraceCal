@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  CloudUpload,
   Download,
   FileCheck2,
   Minus,
@@ -76,9 +77,18 @@ type ReviewableRow = SmartTableRow & {
   decisionTone: Tone;
 };
 
-function App({ report = sampleReport as BacktestReport }: { report?: BacktestReport }) {
+function App({
+  report = sampleReport as BacktestReport,
+  apiBaseUrl = defaultApiBaseUrl(),
+}: {
+  report?: BacktestReport;
+  apiBaseUrl?: string;
+}) {
   const [activeReport, setActiveReport] = useState(report);
   const [reportLoadError, setReportLoadError] = useState("");
+  const [apiSyncStatus, setApiSyncStatus] = useState("");
+  const [apiSyncError, setApiSyncError] = useState("");
+  const [isApiSyncing, setIsApiSyncing] = useState(false);
   const model = useMemo(() => buildDashboardModel(activeReport), [activeReport]);
   const reviewStorageKey = useMemo(
     () => buildReviewStorageKey(model.smartTableRows, model.statusBar.businessDate),
@@ -208,6 +218,34 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
     exportReviewJson(reviewRows, model.statusBar.businessDate);
   };
 
+  const handleSyncReviews = async () => {
+    const normalizedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
+    if (!normalizedApiBaseUrl) {
+      return;
+    }
+    setIsApiSyncing(true);
+    setApiSyncStatus("");
+    setApiSyncError("");
+    try {
+      const response = await fetch(`${normalizedApiBaseUrl}/reviews/import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildReviewJsonPayload(reviewRows)),
+      });
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+      const payload = (await response.json()) as { stored_count?: unknown };
+      const storedCount =
+        typeof payload.stored_count === "number" ? payload.stored_count : reviewRows.length;
+      setApiSyncStatus(`API saved ${storedCount} reviews`);
+    } catch {
+      setApiSyncError("API sync failed");
+    } finally {
+      setIsApiSyncing(false);
+    }
+  };
+
   const handleConfirmTomorrowList = () => {
     exportConfirmedRows(confirmedRows, model.statusBar.businessDate, model.riskNotice);
   };
@@ -263,6 +301,18 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
           >
             <Save size={17} aria-hidden="true" />
           </button>
+          {normalizeApiBaseUrl(apiBaseUrl) ? (
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="同步审核到本地 API"
+              title="同步审核到本地 API"
+              disabled={reviewRows.length === 0 || isApiSyncing}
+              onClick={handleSyncReviews}
+            >
+              <CloudUpload size={17} aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             className="icon-button"
             type="button"
@@ -284,6 +334,18 @@ function App({ report = sampleReport as BacktestReport }: { report?: BacktestRep
       {reportLoadError ? (
         <section className="error-strip" role="alert">
           {reportLoadError}
+        </section>
+      ) : null}
+
+      {apiSyncStatus ? (
+        <section className="success-strip" role="status">
+          {apiSyncStatus}
+        </section>
+      ) : null}
+
+      {apiSyncError ? (
+        <section className="error-strip" role="alert">
+          {apiSyncError}
         </section>
       ) : null}
 
@@ -875,6 +937,14 @@ function hashString(value: string): string {
   return hash.toString(36);
 }
 
+function defaultApiBaseUrl(): string {
+  return import.meta.env.VITE_BOATRACE_API_BASE_URL?.trim() ?? "";
+}
+
+function normalizeApiBaseUrl(apiBaseUrl: string): string {
+  return apiBaseUrl.trim().replace(/\/+$/, "");
+}
+
 function exportReviewRows(
   rows: ReviewableRow[],
   businessDate: string,
@@ -936,18 +1006,23 @@ function exportReviewRows(
 }
 
 function exportReviewJson(rows: ReviewableRow[], businessDate: string): void {
-  const reviewedAt = new Date().toISOString();
-  const records: ReviewJsonRecord[] = rows.map((row) => ({
-    recommendation_id: row.id,
-    race_id: row.raceId,
-    decision: row.reviewDecision,
-    stake_units: row.reviewDecision === "pass" ? 0 : Number(row.displayStakeUnits) || 0,
-    notes: row.displayNotes,
-    reviewed_at: reviewedAt,
-    reviewed_by: REVIEW_EXPORT_USER,
-  }));
-  const payload = `${JSON.stringify({ reviews: records }, null, 2)}\n`;
+  const payload = `${JSON.stringify(buildReviewJsonPayload(rows), null, 2)}\n`;
   triggerJsonDownload(payload, `boatrace-reviews-${safeFilePart(businessDate)}.json`);
+}
+
+function buildReviewJsonPayload(rows: ReviewableRow[]): { reviews: ReviewJsonRecord[] } {
+  const reviewedAt = new Date().toISOString();
+  return {
+    reviews: rows.map((row) => ({
+      recommendation_id: row.id,
+      race_id: row.raceId,
+      decision: row.reviewDecision,
+      stake_units: row.reviewDecision === "pass" ? 0 : Number(row.displayStakeUnits) || 0,
+      notes: row.displayNotes,
+      reviewed_at: reviewedAt,
+      reviewed_by: REVIEW_EXPORT_USER,
+    })),
+  };
 }
 
 function exportConfirmedRows(

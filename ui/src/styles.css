@@ -201,6 +201,18 @@ dd {
   font-weight: 750;
 }
 
+.success-strip {
+  min-height: 34px;
+  margin: -2px 0 10px;
+  border: 1px solid #8fd4c4;
+  border-radius: 6px;
+  padding: 7px 10px;
+  color: #0f766e;
+  background: #e7f9f4;
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
