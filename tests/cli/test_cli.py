@@ -9,6 +9,7 @@ from zipfile import ZipFile
 import boatrace_cal.cli as cli_module
 from boatrace_cal.cli import main
 from boatrace_cal.api_adapter import ApiRequest
+from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.domain.recommendations import Decision
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.strategies.csv import load_strategy_candidates_csv
@@ -1081,6 +1082,77 @@ def test_market_implied_candidates_command_writes_strategy_candidate_csv(
     )
     assert candidates[1].probability == Decimal("0.3333333333333333333333333333")
     assert candidates[1].odds == Decimal("4")
+
+
+def test_lane_position_linear_candidates_command_writes_strategy_candidate_csv(
+    tmp_path: Path,
+) -> None:
+    results_path = tmp_path / "models" / "results.csv"
+    output_path = tmp_path / "models" / "linear-candidates.csv"
+    results_path.parent.mkdir(parents=True)
+    results_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,first,second,third,source,source_hash,"
+                "observed_at,available_at,parser_version",
+                "2026-06-01,05,1,1,2,3,official-results,result-hash-1,"
+                "2026-06-01T08:00:00+00:00,2026-06-01T08:01:00+00:00,results-v1",
+                "2026-06-02,05,1,4,5,6,official-results,result-hash-2,"
+                "2026-06-02T08:00:00+00:00,2026-06-02T08:01:00+00:00,results-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "lane-position-linear-candidates",
+            "--results",
+            str(results_path),
+            "--prediction-as-of",
+            "2026-06-01T10:00:00+00:00",
+            "--race-date",
+            "2026-06-23",
+            "--venue",
+            "05",
+            "--race-no",
+            "1",
+            "--smoothing",
+            "1",
+            "--confidence",
+            "medium",
+            "--data-version",
+            "data-v1",
+            "--feature-version",
+            "lane-position-linear-v1",
+            "--model-version",
+            "lane-position-linear-v1",
+            "--strategy-version",
+            "strategy-v1",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    candidates = load_strategy_candidates_csv(output_path)
+    observed = next(
+        candidate
+        for candidate in candidates
+        if candidate.combination == BetCombination(BetType.TRIFECTA_ORDERED, (1, 2, 3))
+    )
+    unseen = next(
+        candidate
+        for candidate in candidates
+        if candidate.combination == BetCombination(BetType.TRIFECTA_ORDERED, (4, 5, 6))
+    )
+    assert len(candidates) == 120
+    assert observed.probability == unseen.probability * Decimal("8")
+    assert observed.reason_codes == (
+        "lane_position_linear_baseline",
+        "training_races_1",
+    )
 
 
 def test_probability_report_command_writes_model_quality_metrics(tmp_path: Path) -> None:

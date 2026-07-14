@@ -1,5 +1,10 @@
 """Probability baseline models."""
 
+from boatrace_cal.models.lane_position_linear import (
+    LanePositionLinearModel,
+    LanePositionLinearProbability,
+    fit_lane_position_linear_model,
+)
 from boatrace_cal.models.market_implied import (
     MarketImpliedModel,
     MarketImpliedProbability,
@@ -18,6 +23,8 @@ from boatrace_cal.models.trifecta_frequency import (
 from boatrace_cal.models.time_split import build_time_split_report
 
 __all__ = [
+    "LanePositionLinearModel",
+    "LanePositionLinearProbability",
     "MarketImpliedModel",
     "MarketImpliedProbability",
     "ProbabilityEvaluationReport",
@@ -26,6 +33,7 @@ __all__ = [
     "build_market_implied_model",
     "build_time_split_report",
     "evaluate_probability_candidates",
+    "fit_lane_position_linear_model",
     "fit_trifecta_frequency_model",
     "probability_evaluation_report_to_dict",
 ]

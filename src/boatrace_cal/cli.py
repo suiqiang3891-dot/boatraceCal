@@ -48,6 +48,7 @@ from boatrace_cal.models.evaluation import (
     evaluate_probability_candidates,
     probability_evaluation_report_to_dict,
 )
+from boatrace_cal.models.lane_position_linear import fit_lane_position_linear_model
 from boatrace_cal.models.market_implied import build_market_implied_model
 from boatrace_cal.models.time_split import build_time_split_report
 from boatrace_cal.models.trifecta_frequency import fit_trifecta_frequency_model
@@ -126,6 +127,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_frequency_model_candidates(args)
     if args.command == "market-implied-candidates":
         return _run_market_implied_candidates(args)
+    if args.command == "lane-position-linear-candidates":
+        return _run_lane_position_linear_candidates(args)
     if args.command == "probability-report":
         return _run_probability_report(args)
     if args.command == "time-split-report":
@@ -341,6 +344,23 @@ def _build_parser() -> argparse.ArgumentParser:
     market_implied.add_argument("--model-version", required=True)
     market_implied.add_argument("--strategy-version", required=True)
     market_implied.add_argument("--output", required=True, type=Path)
+
+    lane_position_linear = subparsers.add_parser(
+        "lane-position-linear-candidates",
+        help="Fit the lane-position linear baseline and write strategy candidates.",
+    )
+    lane_position_linear.add_argument("--results", required=True, type=Path)
+    lane_position_linear.add_argument("--prediction-as-of", required=True)
+    lane_position_linear.add_argument("--race-date", required=True)
+    lane_position_linear.add_argument("--venue", required=True)
+    lane_position_linear.add_argument("--race-no", required=True, type=int)
+    lane_position_linear.add_argument("--smoothing", default="1")
+    lane_position_linear.add_argument("--confidence", default="medium")
+    lane_position_linear.add_argument("--data-version", required=True)
+    lane_position_linear.add_argument("--feature-version", required=True)
+    lane_position_linear.add_argument("--model-version", required=True)
+    lane_position_linear.add_argument("--strategy-version", required=True)
+    lane_position_linear.add_argument("--output", required=True, type=Path)
 
     probability_report = subparsers.add_parser(
         "probability-report",
@@ -837,6 +857,48 @@ def _run_market_implied_candidates(args: argparse.Namespace) -> int:
             reason_codes=(
                 "market_implied_baseline",
                 f"odds_snapshots_{model.snapshot_count}",
+            ),
+        )
+        for item in model.probabilities
+    )
+    export_strategy_candidates_csv(candidates, args.output)
+    return 0
+
+
+def _run_lane_position_linear_candidates(args: argparse.Namespace) -> int:
+    prediction_as_of = _parse_datetime(args.prediction_as_of, "prediction-as-of")
+    model = fit_lane_position_linear_model(
+        load_results_csv(args.results),
+        as_of=prediction_as_of,
+        smoothing=_parse_decimal_argument(args.smoothing, "smoothing"),
+    )
+    race_id = RaceId(
+        race_date=date.fromisoformat(args.race_date),
+        venue=VenueCode(args.venue),
+        race_no=args.race_no,
+    )
+    versions = ArtifactVersions(
+        data=args.data_version,
+        feature=args.feature_version,
+        model=args.model_version,
+        strategy=args.strategy_version,
+    )
+    candidates = tuple(
+        StrategyCandidate(
+            recommendation_id=f"linear-{race_id}-{item.combination.key}",
+            race_id=race_id,
+            combination=BetCombination(
+                BetType.TRIFECTA_ORDERED,
+                item.combination.lanes,
+            ),
+            probability=item.probability,
+            odds=None,
+            confidence=ConfidenceLevel(args.confidence),
+            as_of=prediction_as_of,
+            versions=versions,
+            reason_codes=(
+                "lane_position_linear_baseline",
+                f"training_races_{model.training_race_count}",
             ),
         )
         for item in model.probabilities
