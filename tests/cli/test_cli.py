@@ -1224,6 +1224,16 @@ def test_probability_report_command_writes_model_quality_metrics(tmp_path: Path)
         "ece_bins": 2,
         "evaluated_race_count": 2,
         "expected_calibration_error": "0.25",
+        "calibration_bins": [
+            {
+                "average_confidence": "0.75",
+                "bin_index": 1,
+                "empirical_accuracy": "0.5",
+                "lower_bound": "0.5",
+                "sample_count": 2,
+                "upper_bound": "1",
+            }
+        ],
         "top1_accuracy": "0.5",
     }
 

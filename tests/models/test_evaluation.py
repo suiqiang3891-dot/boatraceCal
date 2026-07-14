@@ -68,6 +68,16 @@ def test_evaluate_probability_candidates_computes_log_loss_brier_and_ece() -> No
     assert report.average_log_loss == Decimal("0.713558177820072874194520654")
     assert report.average_brier_score == Decimal("0.53")
     assert report.expected_calibration_error == Decimal("0.25")
+    assert report.calibration_bins == (
+        {
+            "bin_index": 1,
+            "lower_bound": Decimal("0.5"),
+            "upper_bound": Decimal("1"),
+            "sample_count": 2,
+            "average_confidence": Decimal("0.75"),
+            "empirical_accuracy": Decimal("0.5"),
+        },
+    )
 
 
 def test_evaluate_probability_candidates_rejects_missing_actual_combination() -> None:

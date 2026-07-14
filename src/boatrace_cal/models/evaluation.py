@@ -3,10 +3,22 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TypedDict
 
 from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.ingestion.results import RaceResultRecord
 from boatrace_cal.strategies.value import StrategyCandidate
+
+
+class CalibrationBinPayload(TypedDict):
+    """JSON-ready calibration bin with Decimal values before string serialization."""
+
+    bin_index: int
+    lower_bound: Decimal
+    upper_bound: Decimal
+    sample_count: int
+    average_confidence: Decimal
+    empirical_accuracy: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +33,7 @@ class ProbabilityEvaluationReport:
     top1_accuracy: Decimal
     expected_calibration_error: Decimal
     ece_bins: int
+    calibration_bins: tuple[CalibrationBinPayload, ...]
 
     def __post_init__(self) -> None:
         if type(self.bet_type) is not BetType:
@@ -31,6 +44,8 @@ class ProbabilityEvaluationReport:
                 raise ValueError(f"{field_name} must be a non-negative integer")
         if self.ece_bins <= 0:
             raise ValueError("ece_bins must be positive")
+        if type(self.calibration_bins) is not tuple:
+            raise TypeError("calibration_bins must be a tuple")
         for field_name in (
             "average_log_loss",
             "average_brier_score",
@@ -94,6 +109,7 @@ def evaluate_probability_candidates(
     if evaluated_count == 0:
         raise ValueError("probability report requires at least one evaluated race")
 
+    calibration_bins = _calibration_bins(top_outcomes, ece_bins)
     return ProbabilityEvaluationReport(
         bet_type=bet_type,
         evaluated_race_count=evaluated_count,
@@ -101,14 +117,18 @@ def evaluate_probability_candidates(
         average_log_loss=_average(log_losses),
         average_brier_score=_average(brier_scores),
         top1_accuracy=_average(tuple(correct for _, correct in top_outcomes)),
-        expected_calibration_error=_expected_calibration_error(top_outcomes, ece_bins),
+        expected_calibration_error=_expected_calibration_error(
+            calibration_bins,
+            evaluated_count,
+        ),
         ece_bins=ece_bins,
+        calibration_bins=calibration_bins,
     )
 
 
 def probability_evaluation_report_to_dict(
     report: ProbabilityEvaluationReport,
-) -> dict[str, str | int]:
+) -> dict[str, object]:
     """Convert probability metrics to a stable JSON-ready dictionary."""
 
     if type(report) is not ProbabilityEvaluationReport:
@@ -122,6 +142,9 @@ def probability_evaluation_report_to_dict(
         "top1_accuracy": str(report.top1_accuracy),
         "expected_calibration_error": str(report.expected_calibration_error),
         "ece_bins": report.ece_bins,
+        "calibration_bins": [
+            _calibration_bin_to_dict(item) for item in report.calibration_bins
+        ],
     }
 
 
@@ -175,12 +198,11 @@ def _brier_score(
     )
 
 
-def _expected_calibration_error(
+def _calibration_bins(
     top_outcomes: list[tuple[Decimal, Decimal]],
     ece_bins: int,
-) -> Decimal:
-    total_count = Decimal(len(top_outcomes))
-    ece = Decimal("0")
+) -> tuple[CalibrationBinPayload, ...]:
+    bins: list[CalibrationBinPayload] = []
     for bin_index in range(ece_bins):
         bin_items = tuple(
             (confidence, correct)
@@ -189,11 +211,45 @@ def _expected_calibration_error(
         )
         if not bin_items:
             continue
-        bin_count = Decimal(len(bin_items))
+        bin_count = len(bin_items)
         accuracy = _average(tuple(correct for _, correct in bin_items))
         confidence = _average(tuple(confidence for confidence, _ in bin_items))
+        bins.append(
+            {
+                "bin_index": bin_index,
+                "lower_bound": Decimal(bin_index) / Decimal(ece_bins),
+                "upper_bound": Decimal(bin_index + 1) / Decimal(ece_bins),
+                "sample_count": bin_count,
+                "average_confidence": confidence,
+                "empirical_accuracy": accuracy,
+            }
+        )
+    return tuple(bins)
+
+
+def _expected_calibration_error(
+    calibration_bins: tuple[CalibrationBinPayload, ...],
+    evaluated_count: int,
+) -> Decimal:
+    total_count = Decimal(evaluated_count)
+    ece = Decimal("0")
+    for bin_payload in calibration_bins:
+        bin_count = Decimal(bin_payload["sample_count"])
+        accuracy = bin_payload["empirical_accuracy"]
+        confidence = bin_payload["average_confidence"]
         ece += (bin_count / total_count) * abs(accuracy - confidence)
     return ece
+
+
+def _calibration_bin_to_dict(item: CalibrationBinPayload) -> dict[str, str | int]:
+    return {
+        "bin_index": item["bin_index"],
+        "lower_bound": str(item["lower_bound"]),
+        "upper_bound": str(item["upper_bound"]),
+        "sample_count": item["sample_count"],
+        "average_confidence": str(item["average_confidence"]),
+        "empirical_accuracy": str(item["empirical_accuracy"]),
+    }
 
 
 def _ece_bin_index(confidence: Decimal, ece_bins: int) -> int:
