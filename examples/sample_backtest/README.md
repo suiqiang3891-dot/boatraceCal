@@ -16,3 +16,10 @@ boatrace-cal backtest-report `
   --bet-type trifecta_ordered `
   --output artifacts\sample-backtest-report.json
 ```
+
+From a source checkout without an installed console script, prefix the same arguments with:
+
+```powershell
+$env:PYTHONPATH="src"
+python -m boatrace_cal backtest-report `
+```
