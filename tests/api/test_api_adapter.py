@@ -52,6 +52,7 @@ def test_api_adapter_routes_review_workflow_requests(tmp_path: Path) -> None:
             },
         )
     )
+    list_response = adapter.handle(ApiRequest(method="GET", path="/reviews"))
     archive_response = adapter.handle(
         ApiRequest(
             method="POST",
@@ -83,6 +84,11 @@ def test_api_adapter_routes_review_workflow_requests(tmp_path: Path) -> None:
 
     assert import_response.status_code == 200
     assert import_response.body == {"stored_count": 2}
+    assert list_response.status_code == 200
+    assert [review["recommendation_id"] for review in list_response.body["reviews"]] == [
+        "rec-confirmed",
+        "rec-pass",
+    ]
     assert confirmed_response.status_code == 200
     assert confirmed_response.body["total_stake_units"] == 2
     assert [entry["recommendation_id"] for entry in confirmed_response.body["entries"]] == [

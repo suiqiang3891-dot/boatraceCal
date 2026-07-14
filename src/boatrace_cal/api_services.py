@@ -17,6 +17,7 @@ from boatrace_cal.reviews import (
     ConfirmedReviewList,
     confirmed_review_list_to_dict,
     review_from_dict,
+    review_to_dict,
 )
 
 
@@ -107,6 +108,11 @@ class ReviewWorkflowService:
         reviews = tuple(review_from_dict(item) for item in reviews_payload)
         stored_reviews = self._store.upsert_reviews(reviews)
         return {"stored_count": len(stored_reviews)}
+
+    def list_reviews(self) -> dict[str, list[dict[str, Any]]]:
+        """Return persisted review records using the OpenAPI import envelope shape."""
+
+        return {"reviews": [review_to_dict(review) for review in self._store.list_reviews()]}
 
     def build_confirmed_review_list(self, payload: object) -> dict[str, Any]:
         """Build a JSON-ready confirmed review checklist from stored reviews."""

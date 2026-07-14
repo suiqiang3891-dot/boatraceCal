@@ -85,6 +85,8 @@ class AnalysisApiAdapter:
                 200,
                 self._candidate_service.get_candidate_detail(path_parts[1], path_parts[3]),
             )
+        if method == "GET" and path_parts == ("reviews",):
+            return ApiResponse(200, self._review_service.list_reviews())
         if method == "POST" and path_parts == ("reviews", "import"):
             return ApiResponse(200, self._review_service.import_reviews(_body(request)))
         if method == "POST" and path_parts == ("reviews", "confirmed-list"):

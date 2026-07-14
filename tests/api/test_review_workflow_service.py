@@ -41,6 +41,28 @@ def test_review_workflow_service_imports_reviews_and_exports_confirmed_artifacts
     )
 
     assert import_response == {"stored_count": 2}
+    assert service.list_reviews() == {
+        "reviews": [
+            {
+                "recommendation_id": "rec-confirmed",
+                "race_id": "20250102-01-01",
+                "decision": "confirmed",
+                "stake_units": 2,
+                "notes": "keep",
+                "reviewed_at": "2026-07-11T03:20:00+00:00",
+                "reviewed_by": "analyst",
+            },
+            {
+                "recommendation_id": "rec-pass",
+                "race_id": "20250102-01-02",
+                "decision": "pass",
+                "stake_units": 0,
+                "notes": "skip",
+                "reviewed_at": "2026-07-11T03:30:00+00:00",
+                "reviewed_by": "analyst",
+            },
+        ]
+    }
     confirmed_list = service.build_confirmed_review_list(
         {
             "business_date": "2025-01-02",

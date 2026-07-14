@@ -114,6 +114,15 @@ _OPENAPI_SPEC: dict[str, Any] = {
                 },
             }
         },
+        "/reviews": {
+            "get": {
+                "summary": "List persisted analyst review records",
+                "responses": {
+                    "200": _json_response("#/components/schemas/ReviewImportRequest"),
+                    "default": _error_response(),
+                },
+            }
+        },
         "/reviews/import": {
             "post": {
                 "summary": "Import analyst review records",

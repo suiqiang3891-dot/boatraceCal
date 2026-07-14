@@ -140,7 +140,7 @@ boatrace-cal serve-api `
   --allowed-origin http://127.0.0.1:5174
 ```
 
-前端配置 API 地址后，顶部会出现“同步审核到本地 API”按钮：
+前端配置 API 地址后，顶部会出现“从本地 API 加载审核”和“同步审核到本地 API”按钮：
 
 ```powershell
 cd ui
@@ -148,7 +148,7 @@ $env:VITE_BOATRACE_API_BASE_URL="http://127.0.0.1:8765"
 npm run dev -- --host 127.0.0.1 --port 5174
 ```
 
-该按钮复用“导出审核 JSON”的 `ReviewImportRequest` 契约，POST 到 `/reviews/import`，不会改写回测报告中的模型推荐或结算事实。
+“同步审核到本地 API”复用“导出审核 JSON”的 `ReviewImportRequest` 契约，POST 到 `/reviews/import`；“从本地 API 加载审核”会 GET `/reviews`，只把当前报告中能匹配到的 `recommendation_id` 合并回页面审核状态。两者都不会改写回测报告中的模型推荐或结算事实。
 
 ## 风险边界
 

@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  CloudDownload,
   CloudUpload,
   Download,
   FileCheck2,
@@ -89,6 +90,7 @@ function App({
   const [apiSyncStatus, setApiSyncStatus] = useState("");
   const [apiSyncError, setApiSyncError] = useState("");
   const [isApiSyncing, setIsApiSyncing] = useState(false);
+  const [isApiLoading, setIsApiLoading] = useState(false);
   const model = useMemo(() => buildDashboardModel(activeReport), [activeReport]);
   const reviewStorageKey = useMemo(
     () => buildReviewStorageKey(model.smartTableRows, model.statusBar.businessDate),
@@ -218,6 +220,36 @@ function App({
     exportReviewJson(reviewRows, model.statusBar.businessDate);
   };
 
+  const handleLoadReviews = async () => {
+    const normalizedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
+    if (!normalizedApiBaseUrl) {
+      return;
+    }
+    setIsApiLoading(true);
+    setApiSyncStatus("");
+    setApiSyncError("");
+    try {
+      const response = await fetch(`${normalizedApiBaseUrl}/reviews`, {
+        method: "GET",
+      });
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+      const payload = await response.json();
+      const loadedState = reviewStateFromJsonPayload(payload, model.smartTableRows);
+      setReviewState((current) => {
+        const next = { ...current, ...loadedState };
+        saveReviewState(reviewStorageKey, next);
+        return next;
+      });
+      setApiSyncStatus(`API loaded ${Object.keys(loadedState).length} reviews`);
+    } catch {
+      setApiSyncError("API load failed");
+    } finally {
+      setIsApiLoading(false);
+    }
+  };
+
   const handleSyncReviews = async () => {
     const normalizedApiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
     if (!normalizedApiBaseUrl) {
@@ -302,16 +334,28 @@ function App({
             <Save size={17} aria-hidden="true" />
           </button>
           {normalizeApiBaseUrl(apiBaseUrl) ? (
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="同步审核到本地 API"
-              title="同步审核到本地 API"
-              disabled={reviewRows.length === 0 || isApiSyncing}
-              onClick={handleSyncReviews}
-            >
-              <CloudUpload size={17} aria-hidden="true" />
-            </button>
+            <>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="从本地 API 加载审核"
+                title="从本地 API 加载审核"
+                disabled={reviewRows.length === 0 || isApiLoading}
+                onClick={handleLoadReviews}
+              >
+                <CloudDownload size={17} aria-hidden="true" />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="同步审核到本地 API"
+                title="同步审核到本地 API"
+                disabled={reviewRows.length === 0 || isApiSyncing}
+                onClick={handleSyncReviews}
+              >
+                <CloudUpload size={17} aria-hidden="true" />
+              </button>
+            </>
           ) : null}
           <button
             className="icon-button"
@@ -927,6 +971,44 @@ function isReviewState(value: unknown): value is ReviewState {
     candidate.stakeUnits >= 0 &&
     typeof candidate.notes === "string"
   );
+}
+
+function reviewStateFromJsonPayload(payload: unknown, rows: SmartTableRow[]): ReviewStateMap {
+  if (!payload || typeof payload !== "object") {
+    return {};
+  }
+  const reviews = (payload as { reviews?: unknown }).reviews;
+  if (!Array.isArray(reviews)) {
+    return {};
+  }
+  const rowIds = new Set(rows.map((row) => row.id));
+  return reviews.reduce<ReviewStateMap>((state, review) => {
+    if (!review || typeof review !== "object") {
+      return state;
+    }
+    const candidate = review as Record<string, unknown>;
+    const id = candidate.recommendation_id;
+    const decision = candidate.decision;
+    const stakeUnits = candidate.stake_units;
+    const notes = candidate.notes;
+    if (
+      typeof id !== "string" ||
+      !rowIds.has(id) ||
+      (decision !== "pending" && decision !== "confirmed" && decision !== "pass") ||
+      typeof stakeUnits !== "number" ||
+      !Number.isInteger(stakeUnits) ||
+      stakeUnits < 0 ||
+      typeof notes !== "string"
+    ) {
+      return state;
+    }
+    state[id] = {
+      decision,
+      stakeUnits,
+      notes,
+    };
+    return state;
+  }, {});
 }
 
 function hashString(value: string): string {

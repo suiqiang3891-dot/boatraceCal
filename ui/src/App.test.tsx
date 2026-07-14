@@ -569,3 +569,50 @@ test("App syncs reviewed rows to a configured local API", async () => {
     ],
   });
 });
+
+test("App loads reviewed rows from a configured local API", async () => {
+  const fetchMock = vi.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      reviews: [
+        {
+          decision: "confirmed",
+          notes: "loaded from store",
+          race_id: "20250102-01-01",
+          recommendation_id: "sample-rec-hit",
+          reviewed_at: "2026-07-12T04:00:00.000Z",
+          reviewed_by: "browser-analyst",
+          stake_units: 2,
+        },
+        {
+          decision: "pass",
+          notes: "loaded pass",
+          race_id: "20250102-01-02",
+          recommendation_id: "sample-rec-miss",
+          reviewed_at: "2026-07-12T04:00:00.000Z",
+          reviewed_by: "browser-analyst",
+          stake_units: 0,
+        },
+      ],
+    }),
+  }));
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<App apiBaseUrl="http://127.0.0.1:8765" />);
+
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "\u4ece\u672c\u5730 API \u52a0\u8f7d\u5ba1\u6838",
+      }),
+    );
+  });
+
+  expect(screen.getByText("API loaded 2 reviews")).toBeInTheDocument();
+  expect(screen.getByText("\u5ba1\u6838 \u5df2\u786e\u8ba4 1 / PASS 1 / \u5f85\u5ba1 0")).toBeInTheDocument();
+  expect(screen.getByLabelText("\u5ba1\u6838\u5907\u6ce8")).toHaveValue("loaded from store");
+  expect(screen.getByLabelText("\u5f53\u524d\u6a21\u62df\u5355\u4f4d")).toHaveTextContent("2 \u5355\u4f4d");
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit | undefined];
+  expect(url).toBe("http://127.0.0.1:8765/reviews");
+  expect(init?.method).toBe("GET");
+});
