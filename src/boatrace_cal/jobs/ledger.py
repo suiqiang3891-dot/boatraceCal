@@ -99,6 +99,15 @@ class FileJobLedger:
             return None
         return JobLedgerRecord.from_dict(payload)
 
+    def list_records(self) -> tuple[JobLedgerRecord, ...]:
+        """Return all ledger records sorted by stable job key."""
+
+        jobs = self._load_jobs()
+        return tuple(
+            JobLedgerRecord.from_dict(payload)
+            for _, payload in sorted(jobs.items(), key=lambda item: item[0])
+        )
+
     def record(
         self,
         job_key: JobKey,
@@ -312,6 +321,51 @@ def mark_missed_snapshot_jobs(
         "skipped_terminal_count": skipped_terminal_count,
         "not_yet_due_count": not_yet_due_count,
         "jobs": missed_records,
+    }
+
+
+def summarize_job_ledger(
+    ledger: FileJobLedger,
+    *,
+    as_of: datetime | None = None,
+) -> dict[str, object]:
+    """Build a status and retry summary for a local job ledger."""
+
+    if type(ledger) is not FileJobLedger:
+        raise TypeError("ledger must be a FileJobLedger")
+    if as_of is not None and (type(as_of) is not datetime or _is_naive(as_of)):
+        raise ValueError("as_of must be timezone-aware")
+
+    records = ledger.list_records()
+    status_counts = {status.value: 0 for status in JobStatus}
+    error_counts: dict[str, int] = {}
+    retry_due_jobs: list[str] = []
+    terminal_count = 0
+    for record in records:
+        status_counts[record.status.value] += 1
+        if record.last_error_code is not None:
+            error_counts[record.last_error_code] = (
+                error_counts.get(record.last_error_code, 0) + 1
+            )
+        if record.status in {JobStatus.SUCCEEDED, JobStatus.FAILED, JobStatus.SKIPPED}:
+            terminal_count += 1
+        if (
+            as_of is not None
+            and record.status is JobStatus.RETRY_WAIT
+            and record.next_retry_at is not None
+            and record.next_retry_at <= as_of
+        ):
+            retry_due_jobs.append(record.job_key.key)
+
+    return {
+        "schema_version": "job-ledger-summary-v1",
+        "as_of": None if as_of is None else as_of.isoformat(),
+        "job_count": len(records),
+        "status_counts": status_counts,
+        "error_counts": dict(sorted(error_counts.items())),
+        "terminal_count": terminal_count,
+        "retry_due_count": len(retry_due_jobs),
+        "retry_due_jobs": retry_due_jobs,
     }
 
 

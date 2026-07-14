@@ -7,6 +7,7 @@ from boatrace_cal.jobs.ledger import (
     mark_missed_snapshot_jobs,
     parse_job_key,
     register_due_jobs,
+    summarize_job_ledger,
 )
 from boatrace_cal.jobs.snapshot_plan import (
     RaceStart,
@@ -36,5 +37,6 @@ __all__ = [
     "register_due_jobs",
     "select_due_snapshot_jobs",
     "snapshot_plan_to_dict",
+    "summarize_job_ledger",
     "transition",
 ]

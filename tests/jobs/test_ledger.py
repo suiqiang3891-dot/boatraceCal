@@ -9,6 +9,7 @@ from boatrace_cal.jobs.ledger import (
     mark_missed_snapshot_jobs,
     parse_job_key,
     register_due_jobs,
+    summarize_job_ledger,
 )
 
 
@@ -187,3 +188,71 @@ def test_mark_missed_snapshot_jobs_skips_expired_unfinished_jobs(tmp_path) -> No
     assert t15.status is JobStatus.SKIPPED
     assert t15.last_error_code == "MISSED_WINDOW"
     assert t10 is None
+
+
+def test_summarize_job_ledger_counts_statuses_errors_and_due_retries(tmp_path) -> None:
+    ledger = FileJobLedger(tmp_path / "jobs.json")
+    retry_key = parse_job_key("official|05|2026-06-23|1|odds|T15")
+    failed_key = parse_job_key("official|05|2026-06-23|2|odds|T15")
+    pending_key = parse_job_key("official|05|2026-06-23|3|odds|T15")
+    ledger.record(
+        retry_key,
+        JobStatus.PENDING,
+        updated_at=datetime(2026, 6, 23, 4, 14, tzinfo=timezone.utc),
+    )
+    ledger.record(
+        retry_key,
+        JobStatus.RUNNING,
+        updated_at=datetime(2026, 6, 23, 4, 15, tzinfo=timezone.utc),
+    )
+    ledger.record(
+        retry_key,
+        JobStatus.RETRY_WAIT,
+        updated_at=datetime(2026, 6, 23, 4, 16, tzinfo=timezone.utc),
+        last_error_code="FETCH_TIMEOUT",
+        next_retry_at=datetime(2026, 6, 23, 4, 17, tzinfo=timezone.utc),
+    )
+    ledger.record(
+        failed_key,
+        JobStatus.PENDING,
+        updated_at=datetime(2026, 6, 23, 4, 14, tzinfo=timezone.utc),
+    )
+    ledger.record(
+        failed_key,
+        JobStatus.RUNNING,
+        updated_at=datetime(2026, 6, 23, 4, 15, tzinfo=timezone.utc),
+    )
+    ledger.record(
+        failed_key,
+        JobStatus.FAILED,
+        updated_at=datetime(2026, 6, 23, 4, 16, tzinfo=timezone.utc),
+        last_error_code="SOURCE_UNAVAILABLE",
+    )
+    ledger.record(
+        pending_key,
+        JobStatus.PENDING,
+        updated_at=datetime(2026, 6, 23, 4, 14, tzinfo=timezone.utc),
+    )
+
+    payload = summarize_job_ledger(
+        ledger,
+        as_of=datetime(2026, 6, 23, 4, 18, tzinfo=timezone.utc),
+    )
+
+    assert payload["schema_version"] == "job-ledger-summary-v1"
+    assert payload["job_count"] == 3
+    assert payload["status_counts"] == {
+        "pending": 1,
+        "running": 0,
+        "retry_wait": 1,
+        "succeeded": 0,
+        "failed": 1,
+        "skipped": 0,
+    }
+    assert payload["error_counts"] == {
+        "FETCH_TIMEOUT": 1,
+        "SOURCE_UNAVAILABLE": 1,
+    }
+    assert payload["terminal_count"] == 1
+    assert payload["retry_due_count"] == 1
+    assert payload["retry_due_jobs"] == [retry_key.key]

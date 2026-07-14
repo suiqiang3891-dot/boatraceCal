@@ -35,6 +35,7 @@ from boatrace_cal.jobs.ledger import (
     mark_missed_snapshot_jobs,
     parse_job_key,
     register_due_jobs,
+    summarize_job_ledger,
 )
 from boatrace_cal.jobs.retry_policy import RetryPolicy, record_failed_job_attempt
 from boatrace_cal.jobs.snapshot_plan import (
@@ -114,6 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_job_ledger_mark_missed(args)
     if args.command == "job-ledger-record-failure":
         return _run_job_ledger_record_failure(args)
+    if args.command == "job-ledger-summary":
+        return _run_job_ledger_summary(args)
     if args.command == "odds-change-alert":
         return _run_odds_change_alert(args)
     if args.command == "quarantine-cleanup":
@@ -260,6 +263,14 @@ def _build_parser() -> argparse.ArgumentParser:
     job_ledger_record_failure.add_argument("--retry-after-seconds", type=int)
     job_ledger_record_failure.add_argument("--checkpoint")
     job_ledger_record_failure.add_argument("--output", required=True, type=Path)
+
+    job_ledger_summary = subparsers.add_parser(
+        "job-ledger-summary",
+        help="Write status counts and due retry jobs from a local JSON ledger.",
+    )
+    job_ledger_summary.add_argument("--ledger", required=True, type=Path)
+    job_ledger_summary.add_argument("--as-of", required=True)
+    job_ledger_summary.add_argument("--output", required=True, type=Path)
 
     odds_change_alert = subparsers.add_parser(
         "odds-change-alert",
@@ -694,6 +705,15 @@ def _run_job_ledger_record_failure(args: argparse.Namespace) -> int:
         else _parse_datetime(args.window_expires_at, "window-expires-at"),
         retry_after_seconds=args.retry_after_seconds,
         checkpoint=args.checkpoint,
+    )
+    _write_json(args.output, payload)
+    return 0
+
+
+def _run_job_ledger_summary(args: argparse.Namespace) -> int:
+    payload = summarize_job_ledger(
+        FileJobLedger(args.ledger),
+        as_of=_parse_datetime(args.as_of, "as-of"),
     )
     _write_json(args.output, payload)
     return 0

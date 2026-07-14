@@ -554,6 +554,92 @@ def test_job_ledger_record_failure_command_applies_retry_policy(tmp_path: Path) 
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_job_ledger_summary_command_writes_status_counts(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "jobs" / "ledger.json"
+    output_path = tmp_path / "jobs" / "summary.json"
+    job_key = "official|05|2026-06-23|1|odds|T15"
+    assert (
+        main(
+            (
+                "job-ledger-record",
+                "--ledger",
+                str(ledger_path),
+                "--job-key",
+                job_key,
+                "--status",
+                "pending",
+                "--updated-at",
+                "2026-06-23T04:14:00+00:00",
+                "--output",
+                str(output_path),
+            )
+        )
+        == 0
+    )
+    assert (
+        main(
+            (
+                "job-ledger-record",
+                "--ledger",
+                str(ledger_path),
+                "--job-key",
+                job_key,
+                "--status",
+                "running",
+                "--updated-at",
+                "2026-06-23T04:15:00+00:00",
+                "--output",
+                str(output_path),
+            )
+        )
+        == 0
+    )
+    assert (
+        main(
+            (
+                "job-ledger-record-failure",
+                "--ledger",
+                str(ledger_path),
+                "--job-key",
+                job_key,
+                "--error-code",
+                "FETCH_TIMEOUT",
+                "--observed-at",
+                "2026-06-23T04:16:00+00:00",
+                "--max-attempts",
+                "3",
+                "--base-delay-seconds",
+                "60",
+                "--max-delay-seconds",
+                "300",
+                "--output",
+                str(output_path),
+            )
+        )
+        == 0
+    )
+
+    exit_code = main(
+        (
+            "job-ledger-summary",
+            "--ledger",
+            str(ledger_path),
+            "--as-of",
+            "2026-06-23T04:18:00+00:00",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "job-ledger-summary-v1"
+    assert payload["status_counts"]["retry_wait"] == 1
+    assert payload["retry_due_count"] == 1
+    assert payload["retry_due_jobs"] == [job_key]
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> None:
     odds_path = tmp_path / "market" / "odds.csv"
     output_path = tmp_path / "reports" / "odds-change-alert.json"

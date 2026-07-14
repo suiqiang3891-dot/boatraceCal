@@ -135,6 +135,24 @@ boatrace-cal job-ledger-record-failure `
 - `SOURCE_UNAVAILABLE` 和 `PARSE_SCHEMA_CHANGED` 等非临时错误直接进入 `failed`，避免无限重试。
 - 对限流响应可传入 `--retry-after-seconds`，优先使用来源返回的等待时间。
 
+## 账本汇总
+
+调度器或 UI 可以用 `job-ledger-summary` 只读汇总当前账本状态，检查是否存在到期重试任务或异常堆积：
+
+```powershell
+boatrace-cal job-ledger-summary `
+  --ledger .\artifacts\jobs\ledger.json `
+  --as-of 2026-06-23T04:18:00+00:00 `
+  --output .\artifacts\jobs\ledger-summary.json
+```
+
+输出 JSON 的 `schema_version` 为 `job-ledger-summary-v1`，包含：
+
+- `status_counts`: 各任务状态数量；
+- `error_counts`: 当前账本中最后错误码的数量；
+- `terminal_count`: 已进入 `succeeded`、`failed` 或 `skipped` 的任务数量；
+- `retry_due_jobs`: `retry_wait` 且 `next_retry_at <= --as-of` 的任务键列表。
+
 ## T-5 赔率变化告警
 
 T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：
