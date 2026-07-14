@@ -27,6 +27,11 @@ from boatrace_cal.ingestion.odds import (
 from boatrace_cal.ingestion.payouts import load_payouts_csv
 from boatrace_cal.ingestion.recommendations import load_recommendations_csv
 from boatrace_cal.ingestion.results import load_results_csv
+from boatrace_cal.jobs.snapshot_plan import (
+    build_prerace_snapshot_plan,
+    export_snapshot_plan_json,
+    load_race_starts_csv,
+)
 from boatrace_cal.models.evaluation import (
     evaluate_probability_candidates,
     probability_evaluation_report_to_dict,
@@ -80,6 +85,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_historical_quality_report(args)
     if args.command == "odds-quality-report":
         return _run_odds_quality_report(args)
+    if args.command == "snapshot-job-plan":
+        return _run_snapshot_job_plan(args)
     if args.command == "frequency-model-candidates":
         return _run_frequency_model_candidates(args)
     if args.command == "market-implied-candidates":
@@ -146,6 +153,15 @@ def _build_parser() -> argparse.ArgumentParser:
     odds_quality.add_argument("--prediction-as-of", required=True)
     odds_quality.add_argument("--max-age-minutes", required=True, type=int)
     odds_quality.add_argument("--output", required=True, type=Path)
+
+    snapshot_plan = subparsers.add_parser(
+        "snapshot-job-plan",
+        help="Build a T-30/T-15/T-10/T-5 pre-race snapshot job plan JSON.",
+    )
+    snapshot_plan.add_argument("--race-starts", required=True, type=Path)
+    snapshot_plan.add_argument("--source", required=True)
+    snapshot_plan.add_argument("--data-type", default="odds")
+    snapshot_plan.add_argument("--output", required=True, type=Path)
 
     backtest = subparsers.add_parser(
         "backtest-report",
@@ -462,6 +478,16 @@ def _run_odds_quality_report(args: argparse.Namespace) -> int:
         max_snapshot_age=timedelta(minutes=args.max_age_minutes),
     )
     _write_json(args.output, odds_quality_report_to_dict(report))
+    return 0
+
+
+def _run_snapshot_job_plan(args: argparse.Namespace) -> int:
+    plan = build_prerace_snapshot_plan(
+        load_race_starts_csv(args.race_starts),
+        source=args.source,
+        data_type=args.data_type,
+    )
+    export_snapshot_plan_json(plan, args.output)
     return 0
 
 

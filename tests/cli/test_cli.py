@@ -211,6 +211,48 @@ def test_odds_quality_report_command_writes_snapshot_coverage_report(
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_snapshot_job_plan_command_writes_timed_prerace_jobs(tmp_path: Path) -> None:
+    race_starts_path = tmp_path / "inputs" / "race-starts.csv"
+    output_path = tmp_path / "jobs" / "snapshot-plan.json"
+    race_starts_path.parent.mkdir(parents=True)
+    race_starts_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,starts_at",
+                "2026-06-23,05,1,2026-06-23T04:30:00+00:00",
+                "2026-06-23,05,2,2026-06-23T05:00:00+00:00",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "snapshot-job-plan",
+            "--race-starts",
+            str(race_starts_path),
+            "--source",
+            "official",
+            "--data-type",
+            "odds",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "snapshot-job-plan-v1"
+    assert payload["job_count"] == 8
+    assert payload["jobs"][0]["job_key"] == "official|05|2026-06-23|1|odds|T30"
+    assert payload["jobs"][0]["scheduled_at"] == "2026-06-23T04:00:00+00:00"
+    assert payload["jobs"][2]["decision_mode"] == "freeze_final_decision"
+    assert payload["jobs"][3]["decision_mode"] == "change_alert_only"
+    assert payload["jobs"][4]["job_key"] == "official|05|2026-06-23|2|odds|T30"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     recommendations_path = tmp_path / "recommendations.csv"
     results_path = tmp_path / "results.csv"
