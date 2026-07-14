@@ -19,6 +19,7 @@ from boatrace_cal.domain.bets import BetCombination, BetType
 from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.domain.recommendations import ConfidenceLevel
 from boatrace_cal.domain.versions import ArtifactVersions
+from boatrace_cal.errors import ErrorCode
 from boatrace_cal.ingestion.odds import (
     OddsSnapshotRecord,
     latest_odds_by_combination,
@@ -34,6 +35,7 @@ from boatrace_cal.jobs.ledger import (
     parse_job_key,
     register_due_jobs,
 )
+from boatrace_cal.jobs.retry_policy import RetryPolicy, record_failed_job_attempt
 from boatrace_cal.jobs.snapshot_plan import (
     build_prerace_snapshot_plan,
     export_snapshot_plan_json,
@@ -109,6 +111,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_job_ledger_register_due(args)
     if args.command == "job-ledger-mark-missed":
         return _run_job_ledger_mark_missed(args)
+    if args.command == "job-ledger-record-failure":
+        return _run_job_ledger_record_failure(args)
     if args.command == "odds-change-alert":
         return _run_odds_change_alert(args)
     if args.command == "frequency-model-candidates":
@@ -238,6 +242,21 @@ def _build_parser() -> argparse.ArgumentParser:
     job_ledger_mark_missed.add_argument("--allowed-lateness-minutes", required=True, type=int)
     job_ledger_mark_missed.add_argument("--checkpoint")
     job_ledger_mark_missed.add_argument("--output", required=True, type=Path)
+
+    job_ledger_record_failure = subparsers.add_parser(
+        "job-ledger-record-failure",
+        help="Record a running job failure using the bounded retry policy.",
+    )
+    _add_job_ledger_arguments(job_ledger_record_failure)
+    job_ledger_record_failure.add_argument("--error-code", required=True)
+    job_ledger_record_failure.add_argument("--observed-at", required=True)
+    job_ledger_record_failure.add_argument("--max-attempts", required=True, type=int)
+    job_ledger_record_failure.add_argument("--base-delay-seconds", required=True, type=int)
+    job_ledger_record_failure.add_argument("--max-delay-seconds", required=True, type=int)
+    job_ledger_record_failure.add_argument("--window-expires-at")
+    job_ledger_record_failure.add_argument("--retry-after-seconds", type=int)
+    job_ledger_record_failure.add_argument("--checkpoint")
+    job_ledger_record_failure.add_argument("--output", required=True, type=Path)
 
     odds_change_alert = subparsers.add_parser(
         "odds-change-alert",
@@ -642,6 +661,27 @@ def _run_job_ledger_mark_missed(args: argparse.Namespace) -> int:
         plan_payload,
         now=_parse_datetime(args.now, "now"),
         allowed_lateness_minutes=args.allowed_lateness_minutes,
+        checkpoint=args.checkpoint,
+    )
+    _write_json(args.output, payload)
+    return 0
+
+
+def _run_job_ledger_record_failure(args: argparse.Namespace) -> int:
+    payload = record_failed_job_attempt(
+        FileJobLedger(args.ledger),
+        parse_job_key(args.job_key),
+        ErrorCode(args.error_code),
+        observed_at=_parse_datetime(args.observed_at, "observed-at"),
+        policy=RetryPolicy(
+            max_attempts=args.max_attempts,
+            base_delay_seconds=args.base_delay_seconds,
+            max_delay_seconds=args.max_delay_seconds,
+        ),
+        window_expires_at=None
+        if args.window_expires_at is None
+        else _parse_datetime(args.window_expires_at, "window-expires-at"),
+        retry_after_seconds=args.retry_after_seconds,
         checkpoint=args.checkpoint,
     )
     _write_json(args.output, payload)

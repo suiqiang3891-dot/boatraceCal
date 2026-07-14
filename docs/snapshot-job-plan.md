@@ -107,6 +107,34 @@ boatrace-cal job-ledger-mark-missed `
 
 该命令会把过窗且未进入终态的任务推进到 `skipped`，并记录 `last_error_code: MISSED_WINDOW`。已 `succeeded`、`failed` 或 `skipped` 的任务不会被覆盖。
 
+## 失败重试策略
+
+抓取执行器在任务处于 `running` 后，如果遇到失败，应使用 `job-ledger-record-failure`
+把错误交给统一的重试策略处理，而不是在外部脚本里临时决定是否继续重试。
+
+```powershell
+boatrace-cal job-ledger-record-failure `
+  --ledger .\artifacts\jobs\ledger.json `
+  --job-key "official|05|2026-06-23|1|odds|T15" `
+  --error-code FETCH_TIMEOUT `
+  --observed-at 2026-06-23T04:16:00+00:00 `
+  --max-attempts 3 `
+  --base-delay-seconds 60 `
+  --max-delay-seconds 300 `
+  --window-expires-at 2026-06-23T04:20:00+00:00 `
+  --checkpoint retry-policy-20260623T0416Z `
+  --output .\artifacts\jobs\failure-decision.json
+```
+
+输出 JSON 的 `schema_version` 为 `job-retry-decision-v1`，包含 `decision` 和更新后的
+`record`。当前策略只把 `FETCH_TIMEOUT` 和 `RATE_LIMITED` 视为可重试错误：
+
+- 未超过 `--max-attempts` 且下一次重试未超过 `--window-expires-at` 时，任务进入 `retry_wait` 并写入 `next_retry_at`。
+- 超过最大尝试次数时，任务进入 `failed`，原因码为 `max_attempts_exhausted`。
+- 下一次重试会落在赛前有效窗口之外时，任务进入 `skipped`，原因码为 `retry_window_expired`，避免事后补抓覆盖赛前可用性。
+- `SOURCE_UNAVAILABLE` 和 `PARSE_SCHEMA_CHANGED` 等非临时错误直接进入 `failed`，避免无限重试。
+- 对限流响应可传入 `--retry-after-seconds`，优先使用来源返回的等待时间。
+
 ## T-5 赔率变化告警
 
 T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：
