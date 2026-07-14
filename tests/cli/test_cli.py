@@ -1156,6 +1156,54 @@ def test_probability_report_command_writes_model_quality_metrics(tmp_path: Path)
     }
 
 
+def test_time_split_report_command_writes_available_at_boundaries(tmp_path: Path) -> None:
+    results_path = tmp_path / "models" / "results.csv"
+    output_path = tmp_path / "models" / "time-split.json"
+    results_path.parent.mkdir(parents=True)
+    results_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,first,second,third,source,source_hash,"
+                "observed_at,available_at,parser_version",
+                "2026-06-01,05,1,1,2,3,official,hash-1,"
+                "2026-06-01T08:00:00+00:00,2026-06-01T09:00:00+00:00,results-v1",
+                "2026-06-01,05,2,1,2,3,official,hash-2,"
+                "2026-06-01T08:00:00+00:00,2026-06-10T09:00:00+00:00,results-v1",
+                "2026-06-01,05,3,1,2,3,official,hash-3,"
+                "2026-06-01T08:00:00+00:00,2026-06-20T09:00:00+00:00,results-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "time-split-report",
+            "--results",
+            str(results_path),
+            "--train-until",
+            "2026-06-05T00:00:00+00:00",
+            "--validation-until",
+            "2026-06-15T00:00:00+00:00",
+            "--test-until",
+            "2026-06-30T00:00:00+00:00",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "model-time-split-report-v1"
+    assert payload["split_field"] == "available_at"
+    assert payload["train_count"] == 1
+    assert payload["validation_count"] == 1
+    assert payload["test_count"] == 1
+    assert payload["leakage_check"] == "passed"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_attach_odds_to_candidates_command_writes_latest_available_odds(
     tmp_path: Path,
 ) -> None:

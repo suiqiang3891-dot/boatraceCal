@@ -49,6 +49,7 @@ from boatrace_cal.models.evaluation import (
     probability_evaluation_report_to_dict,
 )
 from boatrace_cal.models.market_implied import build_market_implied_model
+from boatrace_cal.models.time_split import build_time_split_report
 from boatrace_cal.models.trifecta_frequency import fit_trifecta_frequency_model
 from boatrace_cal.review_archive import freeze_confirmed_review_list
 from boatrace_cal.review_excel import (
@@ -127,6 +128,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_market_implied_candidates(args)
     if args.command == "probability-report":
         return _run_probability_report(args)
+    if args.command == "time-split-report":
+        return _run_time_split_report(args)
     if args.command == "attach-odds-to-candidates":
         return _run_attach_odds_to_candidates(args)
     if args.command == "value-strategy-recommendations":
@@ -348,6 +351,16 @@ def _build_parser() -> argparse.ArgumentParser:
     probability_report.add_argument("--bet-type", required=True)
     probability_report.add_argument("--ece-bins", default=10, type=int)
     probability_report.add_argument("--output", required=True, type=Path)
+
+    time_split = subparsers.add_parser(
+        "time-split-report",
+        help="Write an available_at train/validation/test split report from results CSV.",
+    )
+    time_split.add_argument("--results", required=True, type=Path)
+    time_split.add_argument("--train-until", required=True)
+    time_split.add_argument("--validation-until", required=True)
+    time_split.add_argument("--test-until", required=True)
+    time_split.add_argument("--output", required=True, type=Path)
 
     value_strategy = subparsers.add_parser(
         "value-strategy-recommendations",
@@ -840,6 +853,17 @@ def _run_probability_report(args: argparse.Namespace) -> int:
         ece_bins=args.ece_bins,
     )
     _write_json(args.output, probability_evaluation_report_to_dict(report))
+    return 0
+
+
+def _run_time_split_report(args: argparse.Namespace) -> int:
+    payload = build_time_split_report(
+        load_results_csv(args.results),
+        train_until=_parse_datetime(args.train_until, "train-until"),
+        validation_until=_parse_datetime(args.validation_until, "validation-until"),
+        test_until=_parse_datetime(args.test_until, "test-until"),
+    )
+    _write_json(args.output, payload)
     return 0
 
 

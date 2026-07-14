@@ -15,6 +15,7 @@ from boatrace_cal.models.trifecta_frequency import (
     TrifectaProbability,
     fit_trifecta_frequency_model,
 )
+from boatrace_cal.models.time_split import build_time_split_report
 
 __all__ = [
     "MarketImpliedModel",
@@ -23,6 +24,7 @@ __all__ = [
     "TrifectaFrequencyModel",
     "TrifectaProbability",
     "build_market_implied_model",
+    "build_time_split_report",
     "evaluate_probability_candidates",
     "fit_trifecta_frequency_model",
     "probability_evaluation_report_to_dict",
