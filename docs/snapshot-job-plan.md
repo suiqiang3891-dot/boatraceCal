@@ -43,3 +43,27 @@ boatrace-cal snapshot-job-plan `
 输出 JSON 的 `schema_version` 为 `snapshot-job-plan-v1`。每条任务包含稳定的 `job_key`、场地、日期、比赛编号、数据类型、快照点、计划执行时间、开赛时间和决策模式。
 
 后续真实抓取或 Windows 任务计划只应消费这个计划，不应重新推导 T-10 冻结和 T-5 告警规则。
+
+## T-5 赔率变化告警
+
+T-10 冻结后，可以用 `odds-change-alert` 对比冻结时点和临近开赛时点可见的最新赔率：
+
+```powershell
+boatrace-cal odds-change-alert `
+  --odds .\data\market\odds.csv `
+  --race-date 2026-06-23 `
+  --venue 05 `
+  --race-no 1 `
+  --bet-type trifecta_ordered `
+  --frozen-as-of 2026-06-23T04:20:00+00:00 `
+  --alert-as-of 2026-06-23T04:25:00+00:00 `
+  --min-relative-change 0.10 `
+  --output .\artifacts\alerts\odds-change-alert.json
+```
+
+输出 JSON 的 `schema_version` 为 `odds-change-alert-v1`，并固定包含：
+
+- `alert_only: true`
+- `action: review_required_no_overwrite`
+
+这表示报告只用于提示人工复核或记录风险，不应自动覆盖 T-10 已冻结的确认清单。

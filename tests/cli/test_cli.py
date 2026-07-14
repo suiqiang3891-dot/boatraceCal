@@ -253,6 +253,59 @@ def test_snapshot_job_plan_command_writes_timed_prerace_jobs(tmp_path: Path) -> 
     assert output_path.read_text(encoding="utf-8").endswith("\n")
 
 
+def test_odds_change_alert_command_writes_alert_only_report(tmp_path: Path) -> None:
+    odds_path = tmp_path / "market" / "odds.csv"
+    output_path = tmp_path / "reports" / "odds-change-alert.json"
+    odds_path.parent.mkdir(parents=True)
+    odds_path.write_text(
+        "\n".join(
+            (
+                "race_date,venue,race_no,bet_type,combination,odds,"
+                "source,source_hash,observed_at,available_at,parser_version",
+                "2026-06-23,05,1,exacta_ordered,1-2,5.0,official-odds,hash-t10,"
+                "2026-06-23T04:19:00+00:00,2026-06-23T04:20:00+00:00,odds-v1",
+                "2026-06-23,05,1,exacta_ordered,1-2,6.0,official-odds,hash-t05,"
+                "2026-06-23T04:24:00+00:00,2026-06-23T04:25:00+00:00,odds-v1",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    exit_code = main(
+        (
+            "odds-change-alert",
+            "--odds",
+            str(odds_path),
+            "--race-date",
+            "2026-06-23",
+            "--venue",
+            "05",
+            "--race-no",
+            "1",
+            "--bet-type",
+            "exacta_ordered",
+            "--frozen-as-of",
+            "2026-06-23T04:20:00+00:00",
+            "--alert-as-of",
+            "2026-06-23T04:25:00+00:00",
+            "--min-relative-change",
+            "0.10",
+            "--output",
+            str(output_path),
+        )
+    )
+
+    assert exit_code == 0
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "odds-change-alert-v1"
+    assert payload["alert_only"] is True
+    assert payload["action"] == "review_required_no_overwrite"
+    assert payload["alerts"][0]["combination"] == "1-2"
+    assert payload["alerts"][0]["relative_change"] == "0.20"
+    assert output_path.read_text(encoding="utf-8").endswith("\n")
+
+
 def test_backtest_report_command_writes_json_report(tmp_path: Path) -> None:
     recommendations_path = tmp_path / "recommendations.csv"
     results_path = tmp_path / "results.csv"

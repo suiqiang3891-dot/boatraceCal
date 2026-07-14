@@ -62,6 +62,10 @@ from boatrace_cal.strategies.value import (
 )
 from boatrace_cal.validation.data_quality import build_historical_data_quality_report
 from boatrace_cal.validation.odds_quality import build_odds_quality_report
+from boatrace_cal.validation.odds_change_alert import (
+    build_odds_change_alert_report,
+    odds_change_alert_report_to_dict,
+)
 from boatrace_cal.validation.serialization import (
     historical_data_quality_report_to_dict,
     odds_quality_report_to_dict,
@@ -87,6 +91,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _run_odds_quality_report(args)
     if args.command == "snapshot-job-plan":
         return _run_snapshot_job_plan(args)
+    if args.command == "odds-change-alert":
+        return _run_odds_change_alert(args)
     if args.command == "frequency-model-candidates":
         return _run_frequency_model_candidates(args)
     if args.command == "market-implied-candidates":
@@ -162,6 +168,20 @@ def _build_parser() -> argparse.ArgumentParser:
     snapshot_plan.add_argument("--source", required=True)
     snapshot_plan.add_argument("--data-type", default="odds")
     snapshot_plan.add_argument("--output", required=True, type=Path)
+
+    odds_change_alert = subparsers.add_parser(
+        "odds-change-alert",
+        help="Write an alert-only report for odds moves after the frozen decision point.",
+    )
+    odds_change_alert.add_argument("--odds", required=True, type=Path)
+    odds_change_alert.add_argument("--race-date", required=True)
+    odds_change_alert.add_argument("--venue", required=True)
+    odds_change_alert.add_argument("--race-no", required=True, type=int)
+    odds_change_alert.add_argument("--bet-type", required=True)
+    odds_change_alert.add_argument("--frozen-as-of", required=True)
+    odds_change_alert.add_argument("--alert-as-of", required=True)
+    odds_change_alert.add_argument("--min-relative-change", default="0.10")
+    odds_change_alert.add_argument("--output", required=True, type=Path)
 
     backtest = subparsers.add_parser(
         "backtest-report",
@@ -488,6 +508,26 @@ def _run_snapshot_job_plan(args: argparse.Namespace) -> int:
         data_type=args.data_type,
     )
     export_snapshot_plan_json(plan, args.output)
+    return 0
+
+
+def _run_odds_change_alert(args: argparse.Namespace) -> int:
+    report = build_odds_change_alert_report(
+        records=load_odds_csv(args.odds),
+        race_id=RaceId(
+            race_date=date.fromisoformat(args.race_date),
+            venue=VenueCode(args.venue),
+            race_no=args.race_no,
+        ),
+        bet_type=BetType(args.bet_type),
+        frozen_as_of=_parse_datetime(args.frozen_as_of, "frozen-as-of"),
+        alert_as_of=_parse_datetime(args.alert_as_of, "alert-as-of"),
+        min_relative_change=_parse_decimal_argument(
+            args.min_relative_change,
+            "min-relative-change",
+        ),
+    )
+    _write_json(args.output, odds_change_alert_report_to_dict(report))
     return 0
 
 
