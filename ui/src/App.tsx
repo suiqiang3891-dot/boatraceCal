@@ -297,6 +297,7 @@ function App({
         <dl className="status-grid" aria-label="清单状态">
           <StatusItem label="业务日期" value={model.statusBar.businessDate} />
           <StatusItem label="生成状态" value={model.statusLabel} />
+          <StatusItem label="报告版本" value={model.reportSchemaVersion} />
           <StatusItem label="新鲜度" value={model.statusBar.freshness} />
           <StatusItem label="场地" value={`${model.statusBar.venueCount}`} />
           <StatusItem label="场次" value={`${model.statusBar.raceCount}`} />

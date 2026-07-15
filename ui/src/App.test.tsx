@@ -77,6 +77,8 @@ test("App renders the first smart table workbench from the bundled sample report
   expect(screen.getByRole("heading", { name: "BOAT RACE 智能表格工作台" })).toBeInTheDocument();
   expect(screen.getByText("业务日期")).toBeInTheDocument();
   expect(screen.getAllByText("2025-01-02").length).toBeGreaterThan(0);
+  expect(screen.getByText("报告版本")).toBeInTheDocument();
+  expect(screen.getByText("backtest-report-v1")).toBeInTheDocument();
   expect(screen.getByText("候选 2")).toBeInTheDocument();
   expect(screen.getAllByText("+¥900").length).toBeGreaterThan(0);
   expect(screen.getByRole("region", { name: "置信区间" })).toBeInTheDocument();
