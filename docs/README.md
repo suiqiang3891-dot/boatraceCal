@@ -10,6 +10,7 @@
 4. [模型回测与风险控制](./模型回测与风险控制.md)
 5. [实施路线图](./实施路线图.md)
 6. [Phase 1 基础契约验证记录](./implementation/phase-1-verification.md)
+7. [MVP 开发状态记录（2026-07-15）](./implementation/mvp-status-2026-07-15.md)
 
 ## 当前决策
 
