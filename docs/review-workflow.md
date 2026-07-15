@@ -8,6 +8,7 @@
 
 ```json
 {
+  "schema_version": "recommendation-review-import-v1",
   "reviews": [
     {
       "recommendation_id": "sample-rec-hit",
