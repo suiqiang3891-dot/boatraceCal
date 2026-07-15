@@ -23,6 +23,26 @@ test("buildDashboardModel formats report metrics for the smart table workbench",
     { label: "命中率", value: "50.0%", tone: "neutral" },
     { label: "最大回撤", value: "¥100", tone: "warning" },
   ]);
+  expect(model.confidenceIntervals).toEqual([
+    {
+      label: "净收益区间",
+      pointEstimate: "+¥900",
+      interval: "-¥200 至 +¥2,000",
+      tone: "positive",
+    },
+    {
+      label: "回收率区间",
+      pointEstimate: "550.0%",
+      interval: "0.0% 至 1100.0%",
+      tone: "positive",
+    },
+    {
+      label: "命中率区间",
+      pointEstimate: "50.0%",
+      interval: "0.0% 至 100.0%",
+      tone: "neutral",
+    },
+  ]);
   expect(model.sliceRows).toEqual([
     {
       dimensionLabel: "场地",
@@ -122,6 +142,7 @@ test("buildDashboardModel returns a safe empty model for blocked reports", () =>
   expect(model.statusLabel).toBe("BLOCKED");
   expect(model.statusBar.businessDate).toBe("等待赛前数据");
   expect(model.summaryCards[0]).toEqual({ label: "净收益", value: "¥0", tone: "neutral" });
+  expect(model.confidenceIntervals).toEqual([]);
   expect(model.smartTableRows).toEqual([]);
   expect(model.equityPoints).toEqual([]);
 });

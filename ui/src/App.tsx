@@ -402,6 +402,18 @@ function App({
         ))}
       </section>
 
+      {model.confidenceIntervals.length > 0 ? (
+        <section className="confidence-strip" aria-label="置信区间">
+          {model.confidenceIntervals.map((item) => (
+            <article className={`confidence-chip tone-${item.tone}`} key={item.label}>
+              <span>{item.label}</span>
+              <strong>{item.interval}</strong>
+              <small>点估计 {item.pointEstimate}</small>
+            </article>
+          ))}
+        </section>
+      ) : null}
+
       <section className="filter-row" aria-label="清单筛选">
         <div className="segment-control" aria-label="决策筛选">
           {filters.map((item) => (

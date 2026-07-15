@@ -220,7 +220,15 @@ dd {
   margin-bottom: 10px;
 }
 
+.confidence-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 .summary-chip,
+.confidence-chip,
 .panel,
 .table-panel,
 .detail-panel {
@@ -234,18 +242,38 @@ dd {
   padding: 10px 12px;
 }
 
-.summary-chip span {
+.confidence-chip {
+  min-height: 64px;
+  padding: 10px 12px;
+}
+
+.summary-chip span,
+.confidence-chip span {
   display: block;
   color: #64748b;
   font-size: 0.76rem;
   font-weight: 750;
 }
 
-.summary-chip strong {
+.summary-chip strong,
+.confidence-chip strong {
   display: block;
   margin-top: 4px;
   font-size: 1.22rem;
   line-height: 1.1;
+}
+
+.confidence-chip strong {
+  font-size: 0.98rem;
+  overflow-wrap: anywhere;
+}
+
+.confidence-chip small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 750;
 }
 
 .tone-positive {
@@ -679,6 +707,7 @@ th.sticky-col {
 
   .status-grid,
   .summary-strip,
+  .confidence-strip,
   .detail-list,
   .version-grid {
     grid-template-columns: 1fr 1fr;

@@ -30,6 +30,17 @@ type ReportSlice = {
   net_profit_yen: string;
 };
 
+type ReportMetricInterval = {
+  name: "net_profit_yen" | "return_rate" | "hit_rate";
+  point_estimate: string;
+  lower: string;
+  upper: string;
+};
+
+type ReportConfidenceIntervals = {
+  metrics: ReportMetricInterval[];
+};
+
 type RecommendationSnapshot = {
   stage: "preplan" | "final";
   decision: "select" | "pass";
@@ -78,6 +89,7 @@ export type BacktestReport = {
   } | null;
   slices: ReportSlice[] | null;
   settlements: Settlement[] | null;
+  confidence_intervals?: ReportConfidenceIntervals | null;
 };
 
 export type SummaryCard = {
@@ -93,6 +105,13 @@ export type SliceRow = {
   hitRate: string;
   returnRate: string;
   netProfit: string;
+  tone: Tone;
+};
+
+export type ConfidenceIntervalRow = {
+  label: string;
+  pointEstimate: string;
+  interval: string;
   tone: Tone;
 };
 
@@ -142,6 +161,7 @@ export type DashboardModel = {
     simulationBudget: string;
   };
   summaryCards: SummaryCard[];
+  confidenceIntervals: ConfidenceIntervalRow[];
   sliceRows: SliceRow[];
   smartTableRows: SmartTableRow[];
   equityPoints: Array<{
@@ -191,6 +211,7 @@ export function buildDashboardModel(report: BacktestReport): DashboardModel {
         tone: "warning",
       },
     ],
+    confidenceIntervals: buildConfidenceIntervals(report.confidence_intervals),
     sliceRows: slices.map((item) => ({
       dimensionLabel: dimensionLabel(item.dimension),
       key: item.key,
@@ -206,6 +227,40 @@ export function buildDashboardModel(report: BacktestReport): DashboardModel {
       equityYen: Number(point.equity_yen),
       drawdownYen: Number(point.drawdown_yen),
     })),
+  };
+}
+
+function buildConfidenceIntervals(
+  intervals: ReportConfidenceIntervals | null | undefined,
+): ConfidenceIntervalRow[] {
+  if (!intervals) {
+    return [];
+  }
+  return intervals.metrics.map(toConfidenceIntervalRow);
+}
+
+function toConfidenceIntervalRow(metric: ReportMetricInterval): ConfidenceIntervalRow {
+  if (metric.name === "net_profit_yen") {
+    return {
+      label: "净收益区间",
+      pointEstimate: formatSignedYen(metric.point_estimate),
+      interval: `${formatSignedYen(metric.lower)} 至 ${formatSignedYen(metric.upper)}`,
+      tone: profitTone(metric.point_estimate),
+    };
+  }
+  if (metric.name === "return_rate") {
+    return {
+      label: "回收率区间",
+      pointEstimate: formatRate(metric.point_estimate),
+      interval: `${formatRate(metric.lower)} 至 ${formatRate(metric.upper)}`,
+      tone: rateTone(metric.point_estimate, "1"),
+    };
+  }
+  return {
+    label: "命中率区间",
+    pointEstimate: formatRate(metric.point_estimate),
+    interval: `${formatRate(metric.lower)} 至 ${formatRate(metric.upper)}`,
+    tone: "neutral",
   };
 }
 

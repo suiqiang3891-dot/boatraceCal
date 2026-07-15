@@ -79,6 +79,11 @@ test("App renders the first smart table workbench from the bundled sample report
   expect(screen.getAllByText("2025-01-02").length).toBeGreaterThan(0);
   expect(screen.getByText("候选 2")).toBeInTheDocument();
   expect(screen.getAllByText("+¥900").length).toBeGreaterThan(0);
+  expect(screen.getByRole("region", { name: "置信区间" })).toBeInTheDocument();
+  expect(screen.getByText("净收益区间")).toBeInTheDocument();
+  expect(screen.getByText("-¥200 至 +¥2,000")).toBeInTheDocument();
+  expect(screen.getByText("回收率区间")).toBeInTheDocument();
+  expect(screen.getByText("0.0% 至 1100.0%")).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "场地" })).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "模型概率" })).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "保守EV" })).toBeInTheDocument();
