@@ -67,6 +67,11 @@ def test_evaluate_probability_candidates_computes_log_loss_brier_and_ece() -> No
     assert report.top1_accuracy == Decimal("0.5")
     assert report.average_log_loss == Decimal("0.713558177820072874194520654")
     assert report.average_brier_score == Decimal("0.53")
+    assert report.baseline_name == "uniform_candidate_set"
+    assert report.average_baseline_log_loss == Decimal("0.6931471805599453094172321215")
+    assert report.average_baseline_brier_score == Decimal("0.50")
+    assert report.log_loss_delta_vs_baseline == Decimal("0.0204109972601275647772885325")
+    assert report.brier_score_delta_vs_baseline == Decimal("0.03")
     assert report.expected_calibration_error == Decimal("0.25")
     assert report.calibration_bins == (
         {

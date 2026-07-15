@@ -1219,6 +1219,13 @@ def test_probability_report_command_writes_model_quality_metrics(tmp_path: Path)
     assert payload == {
         "average_brier_score": "0.53",
         "average_log_loss": "0.713558177820072874194520654",
+        "baseline_comparison": {
+            "average_brier_score": "0.50",
+            "average_log_loss": "0.6931471805599453094172321215",
+            "baseline_name": "uniform_candidate_set",
+            "brier_score_delta": "0.03",
+            "log_loss_delta": "0.0204109972601275647772885325",
+        },
         "bet_type": "trifecta_ordered",
         "candidate_count": 4,
         "ece_bins": 2,

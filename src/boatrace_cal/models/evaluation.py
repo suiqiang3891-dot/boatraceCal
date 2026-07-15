@@ -10,6 +10,9 @@ from boatrace_cal.ingestion.results import RaceResultRecord
 from boatrace_cal.strategies.value import StrategyCandidate
 
 
+_UNIFORM_BASELINE_NAME = "uniform_candidate_set"
+
+
 class CalibrationBinPayload(TypedDict):
     """JSON-ready calibration bin with Decimal values before string serialization."""
 
@@ -30,6 +33,11 @@ class ProbabilityEvaluationReport:
     candidate_count: int
     average_log_loss: Decimal
     average_brier_score: Decimal
+    baseline_name: str
+    average_baseline_log_loss: Decimal
+    average_baseline_brier_score: Decimal
+    log_loss_delta_vs_baseline: Decimal
+    brier_score_delta_vs_baseline: Decimal
     top1_accuracy: Decimal
     expected_calibration_error: Decimal
     ece_bins: int
@@ -44,11 +52,17 @@ class ProbabilityEvaluationReport:
                 raise ValueError(f"{field_name} must be a non-negative integer")
         if self.ece_bins <= 0:
             raise ValueError("ece_bins must be positive")
+        if type(self.baseline_name) is not str or not self.baseline_name:
+            raise TypeError("baseline_name must be a non-empty string")
         if type(self.calibration_bins) is not tuple:
             raise TypeError("calibration_bins must be a tuple")
         for field_name in (
             "average_log_loss",
             "average_brier_score",
+            "average_baseline_log_loss",
+            "average_baseline_brier_score",
+            "log_loss_delta_vs_baseline",
+            "brier_score_delta_vs_baseline",
             "top1_accuracy",
             "expected_calibration_error",
         ):
@@ -77,6 +91,8 @@ def evaluate_probability_candidates(
 
     log_losses: list[Decimal] = []
     brier_scores: list[Decimal] = []
+    baseline_log_losses: list[Decimal] = []
+    baseline_brier_scores: list[Decimal] = []
     top_outcomes: list[tuple[Decimal, Decimal]] = []
     for result in normalized_results:
         group = grouped_candidates.get(result.race_id)
@@ -94,6 +110,14 @@ def evaluate_probability_candidates(
 
         log_losses.append(-actual_candidate.probability.ln())
         brier_scores.append(_brier_score(group, actual))
+        baseline_probability = Decimal("1") / Decimal(len(group))
+        baseline_log_losses.append(-baseline_probability.ln())
+        baseline_brier_scores.append(
+            _brier_score_for_probability(
+                candidate_count=len(group),
+                actual_probability=baseline_probability,
+            )
+        )
         top_candidate = max(
             group,
             key=lambda candidate: (candidate.probability, candidate.recommendation_id),
@@ -110,12 +134,21 @@ def evaluate_probability_candidates(
         raise ValueError("probability report requires at least one evaluated race")
 
     calibration_bins = _calibration_bins(top_outcomes, ece_bins)
+    average_log_loss = _average(log_losses)
+    average_brier_score = _average(brier_scores)
+    average_baseline_log_loss = _average(baseline_log_losses)
+    average_baseline_brier_score = _average(baseline_brier_scores)
     return ProbabilityEvaluationReport(
         bet_type=bet_type,
         evaluated_race_count=evaluated_count,
         candidate_count=len(normalized_candidates),
-        average_log_loss=_average(log_losses),
-        average_brier_score=_average(brier_scores),
+        average_log_loss=average_log_loss,
+        average_brier_score=average_brier_score,
+        baseline_name=_UNIFORM_BASELINE_NAME,
+        average_baseline_log_loss=average_baseline_log_loss,
+        average_baseline_brier_score=average_baseline_brier_score,
+        log_loss_delta_vs_baseline=average_log_loss - average_baseline_log_loss,
+        brier_score_delta_vs_baseline=average_brier_score - average_baseline_brier_score,
         top1_accuracy=_average(tuple(correct for _, correct in top_outcomes)),
         expected_calibration_error=_expected_calibration_error(
             calibration_bins,
@@ -139,6 +172,13 @@ def probability_evaluation_report_to_dict(
         "candidate_count": report.candidate_count,
         "average_log_loss": str(report.average_log_loss),
         "average_brier_score": str(report.average_brier_score),
+        "baseline_comparison": {
+            "baseline_name": report.baseline_name,
+            "average_log_loss": str(report.average_baseline_log_loss),
+            "average_brier_score": str(report.average_baseline_brier_score),
+            "log_loss_delta": str(report.log_loss_delta_vs_baseline),
+            "brier_score_delta": str(report.brier_score_delta_vs_baseline),
+        },
         "top1_accuracy": str(report.top1_accuracy),
         "expected_calibration_error": str(report.expected_calibration_error),
         "ece_bins": report.ece_bins,
@@ -195,6 +235,17 @@ def _brier_score(
             for candidate in candidates
         ),
         start=Decimal("0"),
+    )
+
+
+def _brier_score_for_probability(
+    *,
+    candidate_count: int,
+    actual_probability: Decimal,
+) -> Decimal:
+    miss_probability = actual_probability
+    return (actual_probability - Decimal("1")) ** 2 + (
+        Decimal(candidate_count - 1) * (miss_probability**2)
     )
 
 
