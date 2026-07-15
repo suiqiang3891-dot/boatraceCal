@@ -2219,6 +2219,7 @@ def test_review_workflow_export_command_writes_queryable_export_job(tmp_path: Pa
     assert export_exit_code == 0
     assert status_exit_code == 0
     payload = json.loads(job_status_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "export-job-v1"
     assert payload["job_id"] == "confirmed-list-2025-01-02"
     assert payload["status"] == "done"
     assert payload["artifact_path"].endswith("confirmed-list-2025-01-02.xlsx")

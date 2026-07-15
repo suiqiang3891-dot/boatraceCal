@@ -23,6 +23,7 @@ from boatrace_cal.reviews import (
 
 
 RISK_NOTICE = "历史表现不代表未来结果；本系统只提供分析与回测，不承诺盈利，不提供自动下单。"
+EXPORT_JOB_SCHEMA_VERSION = "export-job-v1"
 
 
 class CandidateQueryService:
@@ -172,6 +173,7 @@ class ReviewWorkflowService:
             raise ValueError("export_type must be review_table or confirmed_list")
 
         export_job = {
+            "schema_version": EXPORT_JOB_SCHEMA_VERSION,
             "job_id": job_id,
             "status": "done",
             "artifact_path": str(artifact_path),
@@ -190,6 +192,7 @@ class ReviewWorkflowService:
         payload = json.loads(manifest_path.read_text(encoding="utf-8"))
         export_job = _require_mapping(payload, "export job")
         return {
+            "schema_version": EXPORT_JOB_SCHEMA_VERSION,
             "job_id": _required_string(export_job, "job_id"),
             "status": _required_string(export_job, "status"),
             "artifact_path": _required_string(export_job, "artifact_path"),

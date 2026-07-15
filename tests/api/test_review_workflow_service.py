@@ -99,6 +99,7 @@ def test_review_workflow_service_imports_reviews_and_exports_confirmed_artifacts
             "generated_by": "analyst",
         }
     )
+    assert export_job["schema_version"] == "export-job-v1"
     assert export_job["status"] == "done"
     assert export_job["content_type"] == (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -154,6 +155,7 @@ def test_review_workflow_service_exports_full_review_table_xlsx(tmp_path: Path) 
         }
     )
 
+    assert export_job["schema_version"] == "export-job-v1"
     assert export_job["job_id"] == "review-table-2025-01-02"
     artifact_path = Path(export_job["artifact_path"])
     assert artifact_path.name == "review-table-2025-01-02.xlsx"

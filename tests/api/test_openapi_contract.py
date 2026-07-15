@@ -64,6 +64,11 @@ def test_openapi_contract_exposes_review_workflow_without_prediction_mutation() 
         "confirmed_list",
     ]
     export_job = spec["components"]["schemas"]["ExportJob"]
+    assert export_job["required"][0] == "schema_version"
+    assert export_job["properties"]["schema_version"] == {
+        "type": "string",
+        "const": "export-job-v1",
+    }
     assert export_job["properties"]["artifact_path"]["type"] == "string"
     assert export_job["properties"]["content_type"]["const"] == (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"

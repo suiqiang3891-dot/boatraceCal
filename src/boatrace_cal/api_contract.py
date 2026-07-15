@@ -425,8 +425,15 @@ _OPENAPI_SPEC: dict[str, Any] = {
             },
             "ExportJob": {
                 "type": "object",
-                "required": ["job_id", "status", "artifact_path", "content_type"],
+                "required": [
+                    "schema_version",
+                    "job_id",
+                    "status",
+                    "artifact_path",
+                    "content_type",
+                ],
                 "properties": {
+                    "schema_version": {"type": "string", "const": "export-job-v1"},
                     "job_id": {"type": "string"},
                     "status": {"type": "string", "enum": ["queued", "running", "done", "failed"]},
                     "artifact_path": {"type": "string"},
