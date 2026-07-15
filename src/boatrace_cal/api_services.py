@@ -15,6 +15,7 @@ from boatrace_cal.review_excel import (
 from boatrace_cal.review_store import FileReviewStore
 from boatrace_cal.reviews import (
     ConfirmedReviewList,
+    REVIEW_IMPORT_SCHEMA_VERSION,
     confirmed_review_list_to_dict,
     review_from_dict,
     review_to_dict,
@@ -109,10 +110,13 @@ class ReviewWorkflowService:
         stored_reviews = self._store.upsert_reviews(reviews)
         return {"stored_count": len(stored_reviews)}
 
-    def list_reviews(self) -> dict[str, list[dict[str, Any]]]:
+    def list_reviews(self) -> dict[str, Any]:
         """Return persisted review records using the OpenAPI import envelope shape."""
 
-        return {"reviews": [review_to_dict(review) for review in self._store.list_reviews()]}
+        return {
+            "schema_version": REVIEW_IMPORT_SCHEMA_VERSION,
+            "reviews": [review_to_dict(review) for review in self._store.list_reviews()],
+        }
 
     def build_confirmed_review_list(self, payload: object) -> dict[str, Any]:
         """Build a JSON-ready confirmed review checklist from stored reviews."""

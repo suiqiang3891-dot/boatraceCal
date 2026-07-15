@@ -501,6 +501,7 @@ test("App exports backend compatible review JSON for server handoff", () => {
   ]);
   const exportedText = exportedParts[0].join("");
   expect(JSON.parse(exportedText)).toEqual({
+    schema_version: "recommendation-review-import-v1",
     reviews: [
       {
         decision: "confirmed",
@@ -555,6 +556,7 @@ test("App syncs reviewed rows to a configured local API", async () => {
   expect(init.method).toBe("POST");
   expect(init.headers).toEqual({ "Content-Type": "application/json" });
   expect(JSON.parse(init.body as string)).toEqual({
+    schema_version: "recommendation-review-import-v1",
     reviews: [
       {
         decision: "confirmed",

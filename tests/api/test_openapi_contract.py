@@ -37,6 +37,11 @@ def test_openapi_contract_exposes_review_workflow_without_prediction_mutation() 
     assert "RecommendationReview" in spec["components"]["schemas"]
     assert "ConfirmedReviewList" in spec["components"]["schemas"]
     assert "ConfirmedReviewArchive" in spec["components"]["schemas"]
+    review_import = spec["components"]["schemas"]["ReviewImportRequest"]
+    assert review_import["properties"]["schema_version"] == {
+        "type": "string",
+        "const": "recommendation-review-import-v1",
+    }
     excel_request = spec["components"]["schemas"]["ExcelExportRequest"]
     assert excel_request["required"] == [
         "business_date",

@@ -282,6 +282,10 @@ _OPENAPI_SPEC: dict[str, Any] = {
                 "type": "object",
                 "required": ["reviews"],
                 "properties": {
+                    "schema_version": {
+                        "type": "string",
+                        "const": "recommendation-review-import-v1",
+                    },
                     "reviews": {
                         "type": "array",
                         "items": {"$ref": "#/components/schemas/RecommendationReview"},

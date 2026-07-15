@@ -10,6 +10,7 @@ from typing import cast
 
 
 RISK_NOTICE = "历史表现不代表未来结果；本系统只提供分析与回测，不承诺盈利，不提供自动下单。"
+REVIEW_IMPORT_SCHEMA_VERSION = "recommendation-review-import-v1"
 
 
 class ReviewDecision(StrEnum):

@@ -68,6 +68,11 @@ type ReviewJsonRecord = {
   reviewed_by: string;
 };
 
+type ReviewJsonPayload = {
+  schema_version: "recommendation-review-import-v1";
+  reviews: ReviewJsonRecord[];
+};
+
 type ReviewableRow = SmartTableRow & {
   reviewDecision: ReviewDecision;
   displayStakeUnits: string;
@@ -1104,9 +1109,10 @@ function exportReviewJson(rows: ReviewableRow[], businessDate: string): void {
   triggerJsonDownload(payload, `boatrace-reviews-${safeFilePart(businessDate)}.json`);
 }
 
-function buildReviewJsonPayload(rows: ReviewableRow[]): { reviews: ReviewJsonRecord[] } {
+function buildReviewJsonPayload(rows: ReviewableRow[]): ReviewJsonPayload {
   const reviewedAt = new Date().toISOString();
   return {
+    schema_version: "recommendation-review-import-v1",
     reviews: rows.map((row) => ({
       recommendation_id: row.id,
       race_id: row.raceId,

@@ -42,6 +42,7 @@ def test_review_workflow_service_imports_reviews_and_exports_confirmed_artifacts
 
     assert import_response == {"stored_count": 2}
     assert service.list_reviews() == {
+        "schema_version": "recommendation-review-import-v1",
         "reviews": [
             {
                 "recommendation_id": "rec-confirmed",
