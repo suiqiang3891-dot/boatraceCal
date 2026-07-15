@@ -1219,6 +1219,7 @@ def test_probability_report_command_writes_model_quality_metrics(tmp_path: Path)
     assert exit_code == 0
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload == {
+        "schema_version": "probability-evaluation-report-v1",
         "average_brier_score": "0.53",
         "average_log_loss": "0.713558177820072874194520654",
         "baseline_comparison": {

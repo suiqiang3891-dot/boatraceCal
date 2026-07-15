@@ -167,6 +167,7 @@ def probability_evaluation_report_to_dict(
     if type(report) is not ProbabilityEvaluationReport:
         raise TypeError("report must be a ProbabilityEvaluationReport")
     return {
+        "schema_version": "probability-evaluation-report-v1",
         "bet_type": report.bet_type.value,
         "evaluated_race_count": report.evaluated_race_count,
         "candidate_count": report.candidate_count,

@@ -8,7 +8,10 @@ from boatrace_cal.domain.races import RaceId, VenueCode
 from boatrace_cal.domain.recommendations import ConfidenceLevel
 from boatrace_cal.domain.versions import ArtifactVersions
 from boatrace_cal.ingestion.results import RaceResultRecord
-from boatrace_cal.models.evaluation import evaluate_probability_candidates
+from boatrace_cal.models.evaluation import (
+    evaluate_probability_candidates,
+    probability_evaluation_report_to_dict,
+)
 from boatrace_cal.strategies.value import StrategyCandidate
 
 
@@ -82,6 +85,10 @@ def test_evaluate_probability_candidates_computes_log_loss_brier_and_ece() -> No
             "average_confidence": Decimal("0.75"),
             "empirical_accuracy": Decimal("0.5"),
         },
+    )
+    assert (
+        probability_evaluation_report_to_dict(report)["schema_version"]
+        == "probability-evaluation-report-v1"
     )
 
 
