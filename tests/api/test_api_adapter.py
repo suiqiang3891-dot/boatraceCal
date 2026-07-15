@@ -90,6 +90,8 @@ def test_api_adapter_routes_review_workflow_requests(tmp_path: Path) -> None:
         "rec-pass",
     ]
     assert confirmed_response.status_code == 200
+    assert confirmed_response.body["artifact_type"] == "confirmed_review_list"
+    assert confirmed_response.body["schema_version"] == "confirmed-review-list-v1"
     assert confirmed_response.body["total_stake_units"] == 2
     assert [entry["recommendation_id"] for entry in confirmed_response.body["entries"]] == [
         "rec-confirmed"

@@ -11,6 +11,8 @@ from typing import cast
 
 RISK_NOTICE = "历史表现不代表未来结果；本系统只提供分析与回测，不承诺盈利，不提供自动下单。"
 REVIEW_IMPORT_SCHEMA_VERSION = "recommendation-review-import-v1"
+CONFIRMED_REVIEW_LIST_ARTIFACT_TYPE = "confirmed_review_list"
+CONFIRMED_REVIEW_LIST_SCHEMA_VERSION = "confirmed-review-list-v1"
 
 
 class ReviewDecision(StrEnum):
@@ -221,6 +223,8 @@ def confirmed_review_list_to_dict(review_list: ConfirmedReviewList) -> dict[str,
     if type(review_list) is not ConfirmedReviewList:
         raise TypeError("review_list must be a ConfirmedReviewList")
     return {
+        "artifact_type": CONFIRMED_REVIEW_LIST_ARTIFACT_TYPE,
+        "schema_version": CONFIRMED_REVIEW_LIST_SCHEMA_VERSION,
         "business_date": review_list.business_date,
         "generated_at": review_list.generated_at.isoformat(),
         "generated_by": review_list.generated_by,

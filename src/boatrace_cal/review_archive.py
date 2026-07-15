@@ -7,10 +7,15 @@ import json
 from pathlib import Path
 from typing import Any
 
-from boatrace_cal.reviews import ConfirmedReviewList, confirmed_review_list_to_dict
+from boatrace_cal.reviews import (
+    CONFIRMED_REVIEW_LIST_ARTIFACT_TYPE,
+    CONFIRMED_REVIEW_LIST_SCHEMA_VERSION,
+    ConfirmedReviewList,
+    confirmed_review_list_to_dict,
+)
 
 
-CONFIRMED_REVIEW_ARCHIVE_SCHEMA = "confirmed-review-list-v1"
+CONFIRMED_REVIEW_ARCHIVE_SCHEMA = CONFIRMED_REVIEW_LIST_SCHEMA_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +49,7 @@ def freeze_confirmed_review_list(
     version_id = f"{review_list.business_date}-{content_sha256[:12]}"
     archive_path = Path(archive_dir) / f"{version_id}.json"
     payload = {
-        "artifact_type": "confirmed_review_list",
+        "artifact_type": CONFIRMED_REVIEW_LIST_ARTIFACT_TYPE,
         "schema_version": CONFIRMED_REVIEW_ARCHIVE_SCHEMA,
         "version_id": version_id,
         "content_sha256": content_sha256,

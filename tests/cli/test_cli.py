@@ -1569,6 +1569,8 @@ def test_confirmed_review_list_command_writes_confirmed_reviews(tmp_path: Path) 
 
     assert exit_code == 0
     payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "confirmed_review_list"
+    assert payload["schema_version"] == "confirmed-review-list-v1"
     assert payload["business_date"] == "2025-01-02"
     assert payload["total_stake_units"] == 4
     assert [entry["recommendation_id"] for entry in payload["entries"]] == ["rec-1", "rec-2"]
@@ -1767,6 +1769,8 @@ def test_review_workflow_confirmed_list_command_writes_openapi_response(
 
     assert exit_code == 0
     payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["artifact_type"] == "confirmed_review_list"
+    assert payload["schema_version"] == "confirmed-review-list-v1"
     assert payload["business_date"] == "2025-01-02"
     assert payload["total_stake_units"] == 2
     assert [entry["recommendation_id"] for entry in payload["entries"]] == ["rec-confirmed"]

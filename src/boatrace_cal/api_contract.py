@@ -312,6 +312,8 @@ _OPENAPI_SPEC: dict[str, Any] = {
             "ConfirmedReviewList": {
                 "type": "object",
                 "required": [
+                    "artifact_type",
+                    "schema_version",
                     "business_date",
                     "generated_at",
                     "generated_by",
@@ -320,6 +322,14 @@ _OPENAPI_SPEC: dict[str, Any] = {
                     "entries",
                 ],
                 "properties": {
+                    "artifact_type": {
+                        "type": "string",
+                        "const": "confirmed_review_list",
+                    },
+                    "schema_version": {
+                        "type": "string",
+                        "const": "confirmed-review-list-v1",
+                    },
                     "business_date": {"type": "string"},
                     "generated_at": {"type": "string", "format": "date-time"},
                     "generated_by": {"type": "string"},

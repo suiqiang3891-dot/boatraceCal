@@ -71,6 +71,8 @@ def test_review_workflow_service_imports_reviews_and_exports_confirmed_artifacts
             "generated_by": "analyst",
         }
     )
+    assert confirmed_list["artifact_type"] == "confirmed_review_list"
+    assert confirmed_list["schema_version"] == "confirmed-review-list-v1"
     assert confirmed_list["total_stake_units"] == 2
     assert [entry["recommendation_id"] for entry in confirmed_list["entries"]] == [
         "rec-confirmed"

@@ -42,6 +42,16 @@ def test_openapi_contract_exposes_review_workflow_without_prediction_mutation() 
         "type": "string",
         "const": "recommendation-review-import-v1",
     }
+    confirmed_list = spec["components"]["schemas"]["ConfirmedReviewList"]
+    assert confirmed_list["required"][:2] == ["artifact_type", "schema_version"]
+    assert confirmed_list["properties"]["artifact_type"] == {
+        "type": "string",
+        "const": "confirmed_review_list",
+    }
+    assert confirmed_list["properties"]["schema_version"] == {
+        "type": "string",
+        "const": "confirmed-review-list-v1",
+    }
     excel_request = spec["components"]["schemas"]["ExcelExportRequest"]
     assert excel_request["required"] == [
         "business_date",

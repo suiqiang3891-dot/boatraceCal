@@ -186,6 +186,8 @@ def test_confirmed_review_list_to_dict_serializes_totals() -> None:
     )
 
     assert confirmed_review_list_to_dict(review_list) == {
+        "artifact_type": "confirmed_review_list",
+        "schema_version": "confirmed-review-list-v1",
         "business_date": "2025-01-02",
         "generated_at": "2026-07-11T04:00:00+00:00",
         "generated_by": "analyst",
