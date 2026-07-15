@@ -195,6 +195,7 @@ def test_odds_quality_report_command_writes_snapshot_coverage_report(
 
     assert exit_code == 0
     payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "odds-quality-report-v1"
     assert payload["expected_snapshot_count"] == 30
     assert payload["available_snapshot_count"] == 2
     assert payload["stale_snapshot_count"] == 1

@@ -33,6 +33,7 @@ def test_odds_quality_report_to_dict_serializes_auditable_fields() -> None:
 
     payload = odds_quality_report_to_dict(report)
 
+    assert payload["schema_version"] == "odds-quality-report-v1"
     assert payload["expected_race_count"] == 1
     assert payload["expected_snapshot_count"] == 30
     assert payload["available_snapshot_count"] == 1

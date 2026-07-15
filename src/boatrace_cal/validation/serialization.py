@@ -42,6 +42,7 @@ def odds_quality_report_to_dict(report: OddsQualityReport) -> dict[str, JsonValu
     if type(report) is not OddsQualityReport:
         raise TypeError("report must be an OddsQualityReport")
     return {
+        "schema_version": "odds-quality-report-v1",
         "expected_race_count": report.expected_race_count,
         "expected_snapshot_count": report.expected_snapshot_count,
         "available_snapshot_count": report.available_snapshot_count,
