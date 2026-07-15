@@ -62,8 +62,8 @@ def test_build_backtest_slices_groups_selected_bets_for_ui_reports() -> None:
 
     slices = build_backtest_slices(
         rows=(
-            _row("hit-rec", race_1, trifecta, SettlementStatus.HIT, "100", "300"),
-            _row("miss-rec", race_2, exacta, SettlementStatus.MISS, "100", "0"),
+            _row("hit-rec", race_1, trifecta, SettlementStatus.HIT, "100", "300", odds="2.8"),
+            _row("miss-rec", race_2, exacta, SettlementStatus.MISS, "100", "0", odds="12.0"),
         )
     )
 
@@ -72,6 +72,9 @@ def test_build_backtest_slices_groups_selected_bets_for_ui_reports() -> None:
         ("venue", "02"),
         ("bet_type", "exacta_ordered"),
         ("bet_type", "trifecta_ordered"),
+        ("race_month", "2025-01"),
+        ("odds_band", "odds_10_plus"),
+        ("odds_band", "odds_lt_3"),
     ]
     assert slices[0].selected_bet_count == 1
     assert slices[0].hit_count == 1
@@ -89,6 +92,7 @@ def _row(
     status: SettlementStatus,
     stake_yen: str,
     returned_yen: str,
+    odds: str = "5.2",
 ) -> BacktestSettlementRow:
     returned = Decimal(returned_yen)
     stake = Decimal(stake_yen)
@@ -99,7 +103,7 @@ def _row(
         stake_yen=stake,
         returned_yen=returned,
         net_profit_yen=returned - stake,
-        recommendation=_recommendation(recommendation_id, race_id, combination),
+        recommendation=_recommendation(recommendation_id, race_id, combination, odds),
         settlement=SettlementResult(
             race_id=race_id,
             combination=combination,
@@ -113,6 +117,7 @@ def _recommendation(
     recommendation_id: str,
     race_id: RaceId,
     combination: BetCombination,
+    odds: str = "5.2",
 ) -> Recommendation:
     return Recommendation(
         recommendation_id=recommendation_id,
@@ -122,7 +127,7 @@ def _recommendation(
         decision=Decision.SELECT,
         confidence=ConfidenceLevel.HIGH,
         probability=Decimal("0.25"),
-        odds=Decimal("5.2"),
+        odds=Decimal(odds),
         expected_value=Decimal("0.30"),
         as_of=datetime(2025, 1, 2, 10, 0, tzinfo=UTC),
         stake_units=1,

@@ -53,6 +53,8 @@ def test_run_backtest_returns_settlements_summary_and_equity_when_ready() -> Non
     assert [(item.dimension, item.key) for item in report.slices] == [
         ("venue", "01"),
         ("bet_type", "trifecta_ordered"),
+        ("race_month", "2025-01"),
+        ("odds_band", "odds_3_to_10"),
     ]
 
 

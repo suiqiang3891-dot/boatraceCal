@@ -22,7 +22,7 @@ type EquityPoint = {
 };
 
 type ReportSlice = {
-  dimension: "venue" | "bet_type";
+  dimension: "venue" | "bet_type" | "race_month" | "odds_band";
   key: string;
   selected_bet_count: number;
   hit_rate: string;
@@ -372,7 +372,16 @@ function formatTimestamp(value: string): string {
 }
 
 function dimensionLabel(dimension: ReportSlice["dimension"]): string {
-  return dimension === "venue" ? "场地" : "票种";
+  if (dimension === "venue") {
+    return "场地";
+  }
+  if (dimension === "bet_type") {
+    return "票种";
+  }
+  if (dimension === "race_month") {
+    return "月份";
+  }
+  return "赔率区间";
 }
 
 function betTypeLabel(betType: string): string {

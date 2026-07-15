@@ -82,8 +82,8 @@ class BacktestSlice:
     hit_rate: Decimal
 
     def __post_init__(self) -> None:
-        if self.dimension not in {"venue", "bet_type"}:
-            raise ValueError("dimension must be venue or bet_type")
+        if self.dimension not in {"venue", "bet_type", "race_month", "odds_band"}:
+            raise ValueError("dimension must be venue, bet_type, race_month, or odds_band")
         if type(self.key) is not str or not self.key:
             raise ValueError("key must be a non-empty string")
         for field_name in (
@@ -168,6 +168,14 @@ def build_backtest_slices(*, rows: Iterable[BacktestSettlementRow]) -> tuple[Bac
         rows=normalized_rows,
         dimension="bet_type",
         key_for_row=lambda row: row.settlement.combination.bet_type.value,
+    ) + _build_dimension_slices(
+        rows=normalized_rows,
+        dimension="race_month",
+        key_for_row=lambda row: f"{row.race_id.race_date:%Y-%m}",
+    ) + _build_dimension_slices(
+        rows=normalized_rows,
+        dimension="odds_band",
+        key_for_row=_odds_band_key,
     )
 
 
@@ -226,6 +234,17 @@ def _build_slice(
         return_rate=_safe_divide(total_returned_yen, total_stake_yen),
         hit_rate=_safe_divide(Decimal(hit_count), Decimal(selected_bet_count)),
     )
+
+
+def _odds_band_key(row: BacktestSettlementRow) -> str:
+    odds = row.recommendation.odds
+    if odds is None:
+        return "odds_missing"
+    if odds < Decimal("3"):
+        return "odds_lt_3"
+    if odds < Decimal("10"):
+        return "odds_3_to_10"
+    return "odds_10_plus"
 
 
 def _safe_divide(numerator: Decimal, denominator: Decimal) -> Decimal:

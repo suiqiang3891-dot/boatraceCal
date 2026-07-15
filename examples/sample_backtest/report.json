@@ -175,6 +175,34 @@
       "selected_race_count": 2,
       "total_returned_yen": "1100",
       "total_stake_yen": "200"
+    },
+    {
+      "dimension": "race_month",
+      "hit_count": 1,
+      "hit_rate": "0.5",
+      "key": "2025-01",
+      "miss_count": 1,
+      "net_profit_yen": "900",
+      "payout_missing_count": 0,
+      "return_rate": "5.5",
+      "selected_bet_count": 2,
+      "selected_race_count": 2,
+      "total_returned_yen": "1100",
+      "total_stake_yen": "200"
+    },
+    {
+      "dimension": "odds_band",
+      "hit_count": 1,
+      "hit_rate": "0.5",
+      "key": "odds_3_to_10",
+      "miss_count": 1,
+      "net_profit_yen": "900",
+      "payout_missing_count": 0,
+      "return_rate": "5.5",
+      "selected_bet_count": 2,
+      "selected_race_count": 2,
+      "total_returned_yen": "1100",
+      "total_stake_yen": "200"
     }
   ],
   "summary": {

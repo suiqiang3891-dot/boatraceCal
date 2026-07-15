@@ -84,6 +84,9 @@ test("App renders the first smart table workbench from the bundled sample report
   expect(screen.getByText("-¥200 至 +¥2,000")).toBeInTheDocument();
   expect(screen.getByText("回收率区间")).toBeInTheDocument();
   expect(screen.getByText("0.0% 至 1100.0%")).toBeInTheDocument();
+  expect(screen.getByText("月份")).toBeInTheDocument();
+  expect(screen.getByText("赔率区间")).toBeInTheDocument();
+  expect(screen.getByText("odds_3_to_10")).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "场地" })).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "模型概率" })).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "保守EV" })).toBeInTheDocument();
