@@ -7,6 +7,7 @@ const sampleSettlements = typedSampleReport.settlements ?? [];
 test("buildDashboardModel formats report metrics for the smart table workbench", () => {
   const model = buildDashboardModel(typedSampleReport);
 
+  expect(model.reportSchemaVersion).toBe("backtest-report-v1");
   expect(model.statusLabel).toBe("READY");
   expect(model.riskNotice).toContain("历史表现不代表未来结果");
   expect(model.statusBar).toEqual({

@@ -63,6 +63,7 @@
     "refusal_reason": null,
     "status": "ready"
   },
+  "schema_version": "backtest-report-v1",
   "settlements": [
     {
       "net_profit_yen": "1000",

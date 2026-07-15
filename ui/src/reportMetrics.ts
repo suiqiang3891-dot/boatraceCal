@@ -77,6 +77,7 @@ type Settlement = {
 };
 
 export type BacktestReport = {
+  schema_version?: "backtest-report-v1";
   readiness: {
     status: string;
     ready: boolean;
@@ -149,6 +150,7 @@ export type SmartTableRow = {
 };
 
 export type DashboardModel = {
+  reportSchemaVersion: string;
   statusLabel: string;
   isReady: boolean;
   riskNotice: string;
@@ -178,6 +180,7 @@ export function buildDashboardModel(report: BacktestReport): DashboardModel {
   const smartTableRows = (report.settlements ?? []).map(toSmartTableRow);
 
   return {
+    reportSchemaVersion: report.schema_version ?? "unversioned",
     statusLabel: report.readiness.status.toUpperCase(),
     isReady: report.readiness.ready,
     riskNotice: "历史表现不代表未来结果；本系统只提供分析与回测，不承诺盈利，不提供自动下单。",

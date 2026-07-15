@@ -22,6 +22,8 @@ from boatrace_cal.validation.data_quality import DataQualityIssue
 
 JsonValue = dict[str, Any] | list[Any] | str | int | bool | None
 
+BACKTEST_REPORT_SCHEMA_VERSION = "backtest-report-v1"
+
 
 def backtest_report_to_dict(report: BacktestReport) -> dict[str, JsonValue]:
     """Convert a backtest report to a JSON-ready dictionary."""
@@ -29,6 +31,7 @@ def backtest_report_to_dict(report: BacktestReport) -> dict[str, JsonValue]:
     if type(report) is not BacktestReport:
         raise TypeError("report must be a BacktestReport")
     return {
+        "schema_version": BACKTEST_REPORT_SCHEMA_VERSION,
         "readiness": {
             "status": report.readiness.status.value,
             "ready": report.readiness.ready,

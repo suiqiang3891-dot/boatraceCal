@@ -29,6 +29,7 @@ def test_backtest_report_to_dict_serializes_ready_report_for_json_output() -> No
 
     payload = backtest_report_to_dict(report)
 
+    assert payload["schema_version"] == "backtest-report-v1"
     assert payload["readiness"]["status"] == "ready"
     assert payload["readiness"]["ready"] is True
     assert payload["readiness"]["blockers"] == []
@@ -172,6 +173,7 @@ def test_backtest_report_to_dict_serializes_blocked_report_without_execution_out
 
     payload = backtest_report_to_dict(report)
 
+    assert payload["schema_version"] == "backtest-report-v1"
     assert payload["readiness"]["status"] == "blocked"
     assert payload["readiness"]["ready"] is False
     assert payload["readiness"]["refusal_reason"] == "historical_data_quality_issues"
