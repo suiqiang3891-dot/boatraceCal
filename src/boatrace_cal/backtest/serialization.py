@@ -3,6 +3,11 @@
 from decimal import Decimal
 from typing import Any
 
+from boatrace_cal.backtest.confidence import (
+    BacktestConfidenceIntervals,
+    BacktestMetricInterval,
+    build_backtest_confidence_intervals,
+)
 from boatrace_cal.backtest.equity import EquityCurve, EquityCurvePoint
 from boatrace_cal.backtest.runner import BacktestReport
 from boatrace_cal.backtest.settlement import BacktestSettlementRow
@@ -41,6 +46,9 @@ def backtest_report_to_dict(report: BacktestReport) -> dict[str, JsonValue]:
         if report.settlements is None
         else [_settlement_row_to_dict(row) for row in report.settlements],
         "summary": None if report.summary is None else _summary_to_dict(report.summary),
+        "confidence_intervals": None
+        if report.settlements is None
+        else _confidence_intervals_to_dict(build_backtest_confidence_intervals(rows=report.settlements)),
         "equity_curve": None
         if report.equity_curve is None
         else _equity_curve_to_dict(report.equity_curve),
@@ -125,6 +133,27 @@ def _summary_to_dict(summary: BacktestSummary) -> dict[str, JsonValue]:
         "return_rate": _decimal_to_str(summary.return_rate),
         "hit_rate": _decimal_to_str(summary.hit_rate),
         "coverage_rate": _decimal_to_str(summary.coverage_rate),
+    }
+
+
+def _confidence_intervals_to_dict(intervals: BacktestConfidenceIntervals) -> dict[str, JsonValue]:
+    return {
+        "schema_version": intervals.schema_version,
+        "method": intervals.method,
+        "confidence_level": _decimal_to_str(intervals.confidence_level),
+        "iterations": intervals.iterations,
+        "seed": intervals.seed,
+        "sample_size": intervals.sample_size,
+        "metrics": [_metric_interval_to_dict(metric) for metric in intervals.metrics],
+    }
+
+
+def _metric_interval_to_dict(metric: BacktestMetricInterval) -> dict[str, JsonValue]:
+    return {
+        "name": metric.name,
+        "point_estimate": _decimal_to_str(metric.point_estimate),
+        "lower": _decimal_to_str(metric.lower),
+        "upper": _decimal_to_str(metric.upper),
     }
 
 

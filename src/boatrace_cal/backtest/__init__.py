@@ -1,5 +1,10 @@
 """Backtesting entry points and guardrails."""
 
+from boatrace_cal.backtest.confidence import (
+    BacktestConfidenceIntervals,
+    BacktestMetricInterval,
+    build_backtest_confidence_intervals,
+)
 from boatrace_cal.backtest.equity import (
     EquityCurve,
     EquityCurvePoint,
@@ -26,6 +31,8 @@ from boatrace_cal.backtest.summary import (
 
 __all__ = [
     "BacktestReadiness",
+    "BacktestConfidenceIntervals",
+    "BacktestMetricInterval",
     "BacktestReadinessStatus",
     "BacktestReport",
     "BacktestSettlementRow",
@@ -36,6 +43,7 @@ __all__ = [
     "backtest_report_to_dict",
     "build_equity_curve",
     "build_backtest_slices",
+    "build_backtest_confidence_intervals",
     "check_backtest_inputs_ready",
     "export_backtest_report_json",
     "run_backtest",

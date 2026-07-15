@@ -34,6 +34,34 @@ def test_backtest_report_to_dict_serializes_ready_report_for_json_output() -> No
     assert payload["readiness"]["blockers"] == []
     assert payload["summary"]["selected_bet_count"] == 1
     assert payload["summary"]["net_profit_yen"] == "1100"
+    assert payload["confidence_intervals"] == {
+        "schema_version": "backtest-confidence-intervals-v1",
+        "method": "bootstrap_percentile",
+        "confidence_level": "0.95",
+        "iterations": 1000,
+        "seed": 20250101,
+        "sample_size": 1,
+        "metrics": [
+            {
+                "name": "net_profit_yen",
+                "point_estimate": "1100",
+                "lower": "1100",
+                "upper": "1100",
+            },
+            {
+                "name": "return_rate",
+                "point_estimate": "12",
+                "lower": "12",
+                "upper": "12",
+            },
+            {
+                "name": "hit_rate",
+                "point_estimate": "1",
+                "lower": "1",
+                "upper": "1",
+            },
+        ],
+    }
     assert payload["equity_curve"]["final_equity_yen"] == "1100"
     assert payload["slices"] == [
         {
@@ -120,6 +148,7 @@ def test_backtest_report_to_dict_serializes_blocked_report_without_execution_out
     assert payload["readiness"]["ready"] is False
     assert payload["readiness"]["refusal_reason"] == "historical_data_quality_issues"
     assert payload["summary"] is None
+    assert payload["confidence_intervals"] is None
     assert payload["equity_curve"] is None
     assert payload["slices"] is None
     assert payload["settlements"] is None
