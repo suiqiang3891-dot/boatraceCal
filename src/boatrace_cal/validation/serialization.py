@@ -25,6 +25,7 @@ def historical_data_quality_report_to_dict(
     if type(report) is not HistoricalDataQualityReport:
         raise TypeError("report must be a HistoricalDataQualityReport")
     return {
+        "schema_version": "historical-data-quality-report-v1",
         "expected_race_count": report.expected_race_count,
         "result_count": report.result_count,
         "payout_count": report.payout_count,

@@ -65,6 +65,7 @@ def test_historical_quality_report_command_writes_json_report(tmp_path: Path) ->
 
     assert exit_code == 0
     payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == "historical-data-quality-report-v1"
     assert payload["expected_race_count"] == 2
     assert payload["result_count"] == 1
     assert payload["payout_count"] == 1

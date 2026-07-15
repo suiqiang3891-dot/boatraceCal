@@ -46,6 +46,7 @@ def test_historical_data_quality_report_to_dict_serializes_auditable_fields() ->
     payload = historical_data_quality_report_to_dict(report)
 
     assert payload == {
+        "schema_version": "historical-data-quality-report-v1",
         "expected_race_count": 2,
         "result_count": 1,
         "payout_count": 1,
